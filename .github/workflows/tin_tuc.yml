@@ -1,0 +1,76 @@
+# Chạy hệ thống tin tức trên máy chủ GitHub mỗi 10 phút: lấy tin, gửi Telegram, cập nhật trang web (GitHub Pages).
+# Kho tin (tin_tuc.db) được giữ giữa các lần chạy bằng cache, không commit vào repo.
+name: Tin tuc
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # GitHub có thể chạy trễ vài phút so với lịch
+  workflow_dispatch:          # nút "Run workflow" để chạy tay
+
+permissions:
+  contents: write   # chỉ dùng cho bước giữ lịch chạy bên dưới
+  pages: write
+  id-token: write
+
+concurrency:
+  group: tin-tuc
+  cancel-in-progress: false
+
+jobs:
+  chay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.trien_khai.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Lấy kho tin từ lần chạy trước
+        uses: actions/cache/restore@v4
+        with:
+          path: tin_tuc.db
+          key: tin-db-${{ github.run_id }}
+          restore-keys: tin-db-
+
+      - name: Lấy tin, gửi Telegram, tạo trang HTML
+        run: python tin_tuc.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Lưu kho tin cho lần chạy sau
+        if: always() && hashFiles('tin_tuc.db') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: tin_tuc.db
+          key: tin-db-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Chuẩn bị trang web
+        run: mkdir -p _site && cp tin_tuc.html _site/index.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: trien_khai
+        uses: actions/deploy-pages@v4
+
+      # GitHub tự tắt lịch chạy nếu repo công khai không có commit nào trong 60 ngày.
+      # Bước này tạo một commit rỗng khi commit gần nhất đã quá 45 ngày.
+      - name: Giữ lịch chạy
+        run: |
+          cuoi=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - cuoi )) -gt $(( 45 * 86400 )) ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Giữ lịch chạy tự động"
+            git push
+          fi

@@ -1,0 +1,8 @@
+# Bí mật: token Telegram
+bi_mat.ini
+# Dữ liệu và file sinh ra khi chạy
+tin_tuc.db
+tin_tuc.log*
+tin_tuc.html
+*.tmp
+__pycache__/

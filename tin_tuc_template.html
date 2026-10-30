@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bảng tin tài chính</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #667080; --line: #e3e6ea;
+  --accent: #1f6feb; --accent-soft: #e7f0ff; --new: #d1242f; --chip: #eef1f4; --chip-text: #2b3440;
+  --star: #b7791f; --star-soft: #fff6e0;
+  --c-dn: #1f6feb; --c-ck: #1a7f37; --c-cg: #8250df; --c-vm: #bf5700; --c-hh: #9a6700; --c-qt: #0a7ea4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216; --card: #171b21; --text: #e6e9ed; --muted: #9aa4b2; --line: #2a3038;
+    --accent: #58a6ff; --accent-soft: #15243a; --new: #ff7b72; --chip: #232a33; --chip-text: #d0d7de;
+    --star: #e3b341; --star-soft: #2e2511;
+    --c-dn: #58a6ff; --c-ck: #3fb950; --c-cg: #bc8cff; --c-vm: #f0883e; --c-hh: #d29922; --c-qt: #39c5cf;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 12px; }
+h1 { font-size: 22px; margin: 0; }
+.cap-nhat { color: var(--muted); font-size: 13px; }
+.cap-nhat.cu { color: var(--new); font-weight: 600; }
+.thanh-cong-cu { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.thanh-cong-cu input, .thanh-cong-cu select { font: inherit; color: var(--text); background: var(--card);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.thanh-cong-cu input { flex: 1 1 260px; min-width: 0; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
+.tab { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer;
+  border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 14px; }
+.tab .so { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.tab.chon { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tab.chon .so { color: #ffffffcc; }
+.bo-cuc { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start; }
+@media (max-width: 860px) { .bo-cuc { grid-template-columns: 1fr; } .ben { order: -1; } }
+.ben { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; position: sticky; top: 12px; }
+.ben h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.ma-nong { display: flex; flex-wrap: wrap; gap: 6px; }
+.dang-loc { display: none; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; }
+.dang-loc.hien { display: flex; }
+.dang-loc button { font: inherit; font-size: 13px; border: 0; background: none; color: var(--accent); cursor: pointer; }
+.ngay { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+.ngay:first-child { margin-top: 0; }
+.tin { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px;
+  border-left: 4px solid var(--mau, var(--line)); }
+.tin.uu { background: var(--star-soft); }
+.dong-dau { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.gio { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+.nhan { color: var(--mau); font-weight: 600; }
+.moi { background: var(--new); color: #fff; border-radius: 4px; padding: 0 5px; font-weight: 700; font-size: 11px; }
+.chip { border: 0; background: var(--chip); color: var(--chip-text); border-radius: 6px; padding: 1px 7px; cursor: pointer;
+  font: 600 12px/1.6 ui-monospace, Consolas, monospace; }
+.chip:hover { background: var(--accent-soft); color: var(--accent); }
+.chip.sao { background: var(--star); color: #fff; }
+.chip .dem { font-weight: 400; opacity: .7; margin-left: 3px; }
+.tin a.td { color: var(--text); text-decoration: none; font-weight: 600; font-size: 15.5px; }
+.tin a.td:hover { color: var(--accent); text-decoration: underline; }
+.sapo { color: var(--muted); font-size: 14px; margin-top: 3px; }
+.nguon { margin-left: auto; }
+.trong { text-align: center; color: var(--muted); padding: 40px 0; }
+.them { display: block; margin: 12px auto; font: inherit; padding: 8px 18px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📰 Bảng tin tài chính</h1>
+    <span class="cap-nhat" id="capNhat"></span>
+  </header>
+  <div class="thanh-cong-cu">
+    <input id="timKiem" type="search" placeholder="Tìm mã (HPG) hoặc từ khóa (lãi suất, giá dầu…)">
+    <select id="khoangGio">
+      <option value="3">3 giờ qua</option>
+      <option value="12">12 giờ qua</option>
+      <option value="24">24 giờ qua</option>
+      <option value="72">3 ngày qua</option>
+    </select>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="bo-cuc">
+    <main>
+      <div class="dang-loc" id="dangLoc"></div>
+      <div id="dsTin"></div>
+    </main>
+    <aside class="ben">
+      <h2>Mã được nhắc nhiều nhất</h2>
+      <div class="ma-nong" id="maNong"></div>
+    </aside>
+  </div>
+</div>
+<script>
+const DATA = /*DU_LIEU*/null;
+const MAU = { dn: "var(--c-dn)", ck: "var(--c-ck)", cg: "var(--c-cg)", vm: "var(--c-vm)", hh: "var(--c-hh)", qt: "var(--c-qt)" };
+const TEN_NGAN = { dn: "Doanh nghiệp", ck: "Thị trường CK", cg: "Chuyên gia", vm: "Vĩ mô", hh: "Hàng hóa", qt: "Quốc tế" };
+const UU = new Set(DATA.uu_tien);
+const TRANG = 150;
+
+function boDau(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+}
+function esc(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function luuDoc(k, macDinh) { try { return localStorage.getItem(k) ?? macDinh; } catch (e) { return macDinh; } }
+function luuGhi(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+// Trạng thái lọc lưu trên URL (#nhom=dn&gio=24&q=HPG) để giữ nguyên khi trang tự làm mới
+const tham = new URLSearchParams(location.hash.slice(1));
+const st = { nhom: tham.get("nhom") || "tat", gio: +(tham.get("gio") || 24), q: tham.get("q") || "", ma: tham.get("ma") || "", hien: TRANG };
+function ghiHash() {
+  const p = new URLSearchParams();
+  if (st.nhom !== "tat") p.set("nhom", st.nhom);
+  if (st.gio !== 24) p.set("gio", st.gio);
+  if (st.q) p.set("q", st.q);
+  if (st.ma) p.set("ma", st.ma);
+  history.replaceState(null, "", "#" + p.toString());
+}
+
+// Tin "MỚI": lấy về sau lần cuối bạn mở trang
+const lanTruoc = luuDoc("tt_lan_xem", DATA.cap_nhat);
+luuGhi("tt_lan_xem", DATA.cap_nhat);
+
+for (const t of DATA.tin) {
+  t.d = new Date(t.t);
+  t.uu = t.ma.some(m => UU.has(m));
+  t.moi = t.lay > lanTruoc;
+  t.khoa = boDau(t.td + " " + t.sapo + " " + t.ma.join(" ") + " " + t.nguon);
+}
+
+function capNhatDongHo() {
+  const phut = Math.round((Date.now() - new Date(DATA.cap_nhat)) / 60000);
+  const el = document.getElementById("capNhat");
+  const gio = new Date(DATA.cap_nhat).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  el.textContent = `Cập nhật lúc ${gio} (${phut < 1 ? "vừa xong" : phut + " phút trước"}) · tự làm mới mỗi 5 phút`;
+  el.classList.toggle("cu", phut > 30);
+  if (phut > 30) el.textContent += " · ⚠ Lâu chưa có dữ liệu mới, kiểm tra máy hoặc lịch chạy";
+}
+
+function locTheoGioVaTim() {
+  const tu = Date.now() - st.gio * 3600e3;
+  const q = boDau(st.q.trim());
+  return DATA.tin.filter(t => t.d >= tu && (!q || t.khoa.includes(q)) && (!st.ma || t.ma.includes(st.ma)));
+}
+
+function veTabs(ds) {
+  const dem = { tat: ds.length, uu: ds.filter(t => t.uu).length };
+  for (const k in DATA.nhom) dem[k] = ds.filter(t => t.nhom === k).length;
+  const tabs = [["tat", "Tất cả"]];
+  if (UU.size) tabs.push(["uu", "⭐ Ưu tiên"]);
+  for (const k in DATA.nhom) tabs.push([k, DATA.nhom[k]]);
+  document.getElementById("tabs").innerHTML = tabs.map(([k, ten]) =>
+    `<button class="tab ${st.nhom === k ? "chon" : ""}" data-nhom="${k}">${esc(ten)}<span class="so">${dem[k]}</span></button>`).join("");
+}
+
+function veMaNong(ds) {
+  const dem = {};
+  for (const t of ds) for (const m of t.ma) dem[m] = (dem[m] || 0) + 1;
+  const top = Object.entries(dem).sort((a, b) => b[1] - a[1]).slice(0, 24);
+  document.getElementById("maNong").innerHTML = top.length
+    ? top.map(([m, n]) => `<button class="chip ${UU.has(m) ? "sao" : ""}" data-ma="${m}">${m}<span class="dem">${n}</span></button>`).join("")
+    : `<span class="cap-nhat">Chưa có</span>`;
+}
+
+function nhanNgay(d) {
+  const hom = new Date(); hom.setHours(0, 0, 0, 0);
+  const ngay = new Date(d); ngay.setHours(0, 0, 0, 0);
+  const lech = Math.round((hom - ngay) / 864e5);
+  const s = d.toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit" });
+  return lech === 0 ? "Hôm nay · " + s : lech === 1 ? "Hôm qua · " + s : s;
+}
+
+function veTin(ds) {
+  const loc = st.nhom === "tat" ? ds : st.nhom === "uu" ? ds.filter(t => t.uu) : ds.filter(t => t.nhom === st.nhom);
+  const hien = loc.slice(0, st.hien);
+  let html = "", ngayTruoc = "";
+  for (const t of hien) {
+    const ngay = nhanNgay(t.d);
+    if (ngay !== ngayTruoc) { html += `<div class="ngay">${ngay}</div>`; ngayTruoc = ngay; }
+    const gio = t.d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const chips = t.ma.map(m => `<button class="chip ${UU.has(m) ? "sao" : ""}" data-ma="${m}">${m}</button>`).join("");
+    html += `<article class="tin ${t.uu ? "uu" : ""}" style="--mau:${MAU[t.nhom]}">
+      <div class="dong-dau"><span class="gio">${gio}</span><span class="nhan">${TEN_NGAN[t.nhom]}</span>
+        ${t.moi ? '<span class="moi">MỚI</span>' : ""}${chips}
+        <span class="nguon">${esc(t.nguon)}${t.dich ? " · dịch máy" : ""}</span></div>
+      <a class="td" href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.td)}</a>
+      ${t.sapo ? `<div class="sapo">${esc(t.sapo)}</div>` : ""}
+    </article>`;
+  }
+  if (!loc.length) html = `<div class="trong">Không có tin phù hợp. Thử mở rộng khoảng thời gian hoặc xóa bộ lọc.</div>`;
+  if (loc.length > st.hien) html += `<button class="them" id="xemThem">Xem thêm (${loc.length - st.hien} tin)</button>`;
+  document.getElementById("dsTin").innerHTML = html;
+
+  const dl = document.getElementById("dangLoc");
+  dl.classList.toggle("hien", !!st.ma);
+  dl.innerHTML = st.ma ? `Đang lọc mã <b>${esc(st.ma)}</b><button id="boLocMa">✕ Bỏ lọc</button>` : "";
+}
+
+function ve() {
+  const ds = locTheoGioVaTim();
+  veTabs(ds); veMaNong(ds); veTin(ds); ghiHash();
+}
+
+document.addEventListener("click", e => {
+  const tab = e.target.closest(".tab");
+  if (tab) { st.nhom = tab.dataset.nhom; st.hien = TRANG; ve(); return; }
+  const chip = e.target.closest(".chip");
+  if (chip) { st.ma = st.ma === chip.dataset.ma ? "" : chip.dataset.ma; st.hien = TRANG; ve(); scrollTo({ top: 0 }); return; }
+  if (e.target.id === "boLocMa") { st.ma = ""; ve(); return; }
+  if (e.target.id === "xemThem") { st.hien += TRANG; ve(); }
+});
+const oTim = document.getElementById("timKiem");
+oTim.value = st.q;
+oTim.addEventListener("input", () => { st.q = oTim.value; st.hien = TRANG; ve(); });
+const chonGio = document.getElementById("khoangGio");
+chonGio.value = String(st.gio);
+chonGio.addEventListener("change", () => { st.gio = +chonGio.value; ve(); });
+
+capNhatDongHo();
+setInterval(capNhatDongHo, 60e3);
+ve();
+// Tự tải lại để lấy dữ liệu mới (chương trình ghi lại file mỗi 10 phút); không tải lại khi đang gõ tìm kiếm
+setInterval(() => { if (document.activeElement !== oTim) location.reload(); }, 5 * 60e3);
+</script>
+</body>
+</html>
