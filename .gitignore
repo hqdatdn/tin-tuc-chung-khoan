@@ -1,5 +1,6 @@
 # Bí mật: token Telegram
 bi_mat.ini
+dua_len_github.ps1
 # Dữ liệu và file sinh ra khi chạy
 tin_tuc.db
 tin_tuc.log*

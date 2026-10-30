@@ -44,6 +44,7 @@ VN_TZ = timezone(timedelta(hours=7))
 
 LUU_TOI_DA_GIO = 48    # bỏ qua tin cũ hơn mức này
 XOA_SAU_NGAY = 30      # kho tin chỉ giữ bấy nhiêu ngày cho gọn
+DICH_TOI_DA_MOI_LAN = 40   # tin tồn đọng nhiều thì dịch dần qua các lần chạy
 GUI_TOI_DA_GIO = 12    # tin chưa gửi mà cũ hơn mức này thì không gửi nữa (sau khi máy tắt lâu)
 
 GN_EN = "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q="
@@ -305,16 +306,48 @@ def rut_gon_sapo(tom_tat, tieu_de, toi_da=220):
 RE_TIENG_VIET = re.compile(r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]", re.I)
 
 
+def _dich_google(text):
+    r = requests.get("https://translate.googleapis.com/translate_a/single", timeout=15, params={
+        "client": "gtx", "sl": "auto", "tl": "vi", "dt": "t", "q": text})
+    r.raise_for_status()
+    return "".join(seg[0] for seg in r.json()[0] if seg[0])
+
+
+def _dich_google_2(text):
+    r = requests.get("https://clients5.google.com/translate_a/t", timeout=15, params={
+        "client": "dict-chrome-ex", "sl": "auto", "tl": "vi", "q": text})
+    r.raise_for_status()
+    kq = r.json()[0]
+    return kq[0] if isinstance(kq, list) else kq
+
+
+def _dich_mymemory(text):
+    r = requests.get("https://api.mymemory.translated.net/get", timeout=15, params={"q": text, "langpair": "en|vi"})
+    r.raise_for_status()
+    j = r.json()
+    if j.get("responseStatus") != 200 or j.get("quotaFinished"):
+        raise RuntimeError(j.get("responseDetails") or "hết lượt dịch miễn phí")
+    return j["responseData"]["translatedText"]
+
+
+# Dịch vụ dịch miễn phí, thử lần lượt. Máy chủ GitHub hay bị Google chặn (lỗi 429) nên cần dự phòng.
+DICH_VU = [("Google", _dich_google), ("Google 2", _dich_google_2), ("MyMemory", _dich_mymemory)]
+_dich_vu_hong = set()   # dịch vụ đã lỗi trong lần chạy này, không thử lại
+
+
 def dich(text):
-    """Dịch sang tiếng Việt bằng Google Dịch (bản miễn phí). Lỗi thì trả None để giữ nguyên bản gốc."""
-    try:
-        r = requests.get("https://translate.googleapis.com/translate_a/single", timeout=15, params={
-            "client": "gtx", "sl": "auto", "tl": "vi", "dt": "t", "q": text})
-        r.raise_for_status()
-        return "".join(seg[0] for seg in r.json()[0] if seg[0])
-    except Exception as e:
-        log.warning("Không dịch được: %s", e)
-        return None
+    """Dịch sang tiếng Việt. Mọi dịch vụ đều lỗi thì trả None để giữ nguyên bản gốc."""
+    for ten, ham in DICH_VU:
+        if ten in _dich_vu_hong:
+            continue
+        try:
+            kq = ham(text)
+            if kq:
+                return kq
+        except Exception as e:
+            _dich_vu_hong.add(ten)
+            log.warning("Dịch vụ dịch %s lỗi (%s), chuyển sang dịch vụ khác", ten, str(e)[:60])
+    return None
 
 
 def dich_tin_nuoc_ngoai(con):
@@ -327,7 +360,12 @@ def dich_tin_nuoc_ngoai(con):
         if RE_TIENG_VIET.search(tieu_de):
             con.execute("UPDATE tin SET dich=2 WHERE id=?", (id_,))
             continue
-        sapo = rut_gon_sapo(tom_tat, tieu_de, toi_da=400)
+        if len(_dich_vu_hong) == len(DICH_VU):
+            log.warning("Tất cả dịch vụ dịch đều lỗi, để lần chạy sau dịch tiếp")
+            break
+        if da_dich >= DICH_TOI_DA_MOI_LAN:
+            break
+        sapo = rut_gon_sapo(tom_tat, tieu_de, toi_da=300)  # MyMemory nhận tối đa 500 ký tự
         ban_dich = dich(tieu_de + ("\n" + sapo if sapo else ""))
         if not ban_dich:
             continue
