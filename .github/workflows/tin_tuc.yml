@@ -4,7 +4,8 @@ name: Tin tuc
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # GitHub có thể chạy trễ vài phút so với lịch
+    # Phút lẻ để tránh giờ cao điểm (:00, :10...) khi GitHub hay bỏ qua lịch. Có thể trễ vài phút.
+    - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:          # nút "Run workflow" để chạy tay
 
 permissions:
