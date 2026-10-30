@@ -276,7 +276,10 @@ capNhatDongHo();
 setInterval(capNhatDongHo, 60e3);
 ve();
 // Tự tải lại để lấy dữ liệu mới (chương trình ghi lại file mỗi 10 phút); không tải lại khi đang gõ tìm kiếm
-setInterval(() => { if (document.activeElement !== oTim) location.reload(); }, 5 * 60e3);
+// Thêm ?t=... để trình duyệt không dùng bản lưu tạm (GitHub Pages cho giữ tạm 10 phút)
+setInterval(() => {
+  if (document.activeElement !== oTim) location.replace(location.pathname + "?t=" + Date.now() + location.hash);
+}, 5 * 60e3);
 </script>
 </body>
 </html>
