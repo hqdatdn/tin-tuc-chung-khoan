@@ -10,6 +10,7 @@
   --accent: #1f6feb; --accent-soft: #e7f0ff; --new: #d1242f; --chip: #eef1f4; --chip-text: #2b3440;
   --star: #b7791f; --star-soft: #fff6e0;
   --c-dn: #1f6feb; --c-ck: #1a7f37; --c-cg: #8250df; --c-vm: #bf5700; --c-hh: #9a6700; --c-qt: #0a7ea4;
+  --up: #1a7f37; --down: #cf222e; --zebra: #f6f8fa;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -17,6 +18,7 @@
     --accent: #58a6ff; --accent-soft: #15243a; --new: #ff7b72; --chip: #232a33; --chip-text: #d0d7de;
     --star: #e3b341; --star-soft: #2e2511;
     --c-dn: #58a6ff; --c-ck: #3fb950; --c-cg: #bc8cff; --c-vm: #f0883e; --c-hh: #d29922; --c-qt: #39c5cf;
+    --up: #3fb950; --down: #ff7b72; --zebra: #1c2129;
   }
 }
 * { box-sizing: border-box; }
@@ -37,10 +39,24 @@ h1 { font-size: 22px; margin: 0; }
 .tab .so { color: var(--muted); font-size: 12px; margin-left: 4px; }
 .tab.chon { background: var(--accent); border-color: var(--accent); color: #fff; }
 .tab.chon .so { color: #ffffffcc; }
-.bo-cuc { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start; }
-@media (max-width: 860px) { .bo-cuc { grid-template-columns: 1fr; } .ben { order: -1; } }
-.ben { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; position: sticky; top: 12px; }
-.ben h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.bo-cuc { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .bo-cuc { grid-template-columns: 1fr; } .ben { order: -1; } }
+.the { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; }
+.the h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.tab-gia { display: flex; overflow-x: auto; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.tab-gia button { flex: none; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted);
+  font: inherit; font-size: 13px; padding: 6px 8px; cursor: pointer; }
+.tab-gia button.chon { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+table.gia { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.gia td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.gia tr:nth-child(even) td { background: var(--zebra); }
+table.gia td.so { text-align: right; white-space: nowrap; }
+table.gia .dv { display: block; font-size: 11px; color: var(--muted); }
+.tang { color: var(--up); }
+.giam { color: var(--down); }
+.ghi-chu { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 900px) { .cuon-gia { max-height: 330px; overflow-y: auto; } }
+@media (max-width: 520px) { table.gia .bo-doi { display: none; } }
 .ma-nong { display: flex; flex-wrap: wrap; gap: 6px; }
 .dang-loc { display: none; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; }
 .dang-loc.hien { display: flex; }
@@ -90,8 +106,16 @@ h1 { font-size: 22px; margin: 0; }
       <div id="dsTin"></div>
     </main>
     <aside class="ben">
-      <h2>Mã được nhắc nhiều nhất</h2>
-      <div class="ma-nong" id="maNong"></div>
+      <section class="the">
+        <h2>Bảng giá</h2>
+        <div class="tab-gia" id="tabGia"></div>
+        <div class="cuon-gia"><table class="gia"><tbody id="bangGia"></tbody></table></div>
+        <div class="ghi-chu">Nguồn Yahoo Finance, trễ khoảng 10–15 phút. Thay đổi so với phiên trước.</div>
+      </section>
+      <section class="the">
+        <h2>Mã được nhắc nhiều nhất</h2>
+        <div class="ma-nong" id="maNong"></div>
+      </section>
     </aside>
   </div>
 </div>
@@ -206,6 +230,32 @@ function ve() {
   const ds = locTheoGioVaTim();
   veTabs(ds); veMaNong(ds); veTin(ds); ghiHash();
 }
+
+const GIA = DATA.gia || {};
+let nhomGia = luuDoc("tt_nhom_gia", "hh");
+function soDep(x, theoGia = x) {
+  const le = Math.abs(theoGia) >= 10 ? 2 : 4;
+  return x.toLocaleString("vi-VN", { minimumFractionDigits: le, maximumFractionDigits: le });
+}
+function veGia() {
+  if (!GIA[nhomGia]) nhomGia = Object.keys(GIA)[0];
+  if (!nhomGia) { document.getElementById("bangGia").innerHTML = "<tr><td>Chưa có dữ liệu giá</td></tr>"; return; }
+  document.getElementById("tabGia").innerHTML = Object.entries(GIA).map(([k, n]) =>
+    `<button class="${k === nhomGia ? "chon" : ""}" data-gia="${k}">${esc(n.ten)}</button>`).join("");
+  document.getElementById("bangGia").innerHTML = GIA[nhomGia].ds.map(g => {
+    const lop = g.doi > 0 ? "tang" : g.doi < 0 ? "giam" : "";
+    const mui = g.doi > 0 ? "▲" : g.doi < 0 ? "▼" : "";
+    return `<tr><td>${esc(g.ten)}<span class="dv">${esc(g.dv)}</span></td>
+      <td class="so">${soDep(g.gia)}</td>
+      <td class="so bo-doi ${lop}">${mui} ${soDep(Math.abs(g.doi), g.gia)}</td>
+      <td class="so ${lop}">${g.pt > 0 ? "+" : ""}${g.pt.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td></tr>`;
+  }).join("");
+}
+document.getElementById("tabGia").addEventListener("click", e => {
+  const b = e.target.closest("button[data-gia]");
+  if (b) { nhomGia = b.dataset.gia; luuGhi("tt_nhom_gia", nhomGia); veGia(); }
+});
+veGia();
 
 document.addEventListener("click", e => {
   const tab = e.target.closest(".tab");

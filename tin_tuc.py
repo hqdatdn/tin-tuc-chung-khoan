@@ -378,6 +378,59 @@ def dich_tin_nuoc_ngoai(con):
         log.info("Đã dịch %d tin nước ngoài", da_dich)
 
 
+# Bảng giá trên trang HTML: (tên, mã Yahoo Finance, đơn vị). Nguồn Yahoo, giá trễ khoảng 10-15 phút.
+BANG_GIA = {
+    "hh": ("Hàng hóa", [
+        ("Dầu WTI", "CL=F", "USD/thùng"), ("Dầu Brent", "BZ=F", "USD/thùng"),
+        ("Khí tự nhiên", "NG=F", "USD/MMBtu"), ("Xăng RBOB", "RB=F", "USD/gallon"),
+        ("Dầu sưởi", "HO=F", "USD/gallon"), ("Khí châu Âu (TTF)", "TTF=F", "EUR/MWh"),
+        ("Than (API2)", "MTF=F", "USD/tấn"), ("Vàng", "GC=F", "USD/oz"), ("Bạc", "SI=F", "USD/oz"),
+        ("Bạch kim", "PL=F", "USD/oz"), ("Đồng", "HG=F", "USD/lb"), ("Nhôm", "ALI=F", "USD/tấn"),
+        ("Quặng sắt", "TIO=F", "USD/tấn"), ("Thép HRC (Mỹ)", "HRC=F", "USD/tấn ngắn"),
+        ("Đậu tương", "ZS=F", "US cent/giạ"), ("Lúa mì", "ZW=F", "US cent/giạ"), ("Ngô", "ZC=F", "US cent/giạ"),
+        ("Gạo thô", "ZR=F", "USD/cwt"), ("Cà phê Arabica", "KC=F", "US cent/lb"), ("Đường", "SB=F", "US cent/lb"),
+        ("Bông", "CT=F", "US cent/lb"), ("Gỗ xẻ", "LBR=F", "USD/1000 board feet"),
+    ]),
+    "cs": ("Chỉ số", [
+        ("VN-Index", "^VNINDEX.VN", "điểm"), ("S&P 500", "^GSPC", "điểm"), ("Nasdaq", "^IXIC", "điểm"),
+        ("Dow Jones", "^DJI", "điểm"), ("Nikkei 225", "^N225", "điểm"), ("Thượng Hải", "000001.SS", "điểm"),
+        ("Hang Seng", "^HSI", "điểm"), ("KOSPI", "^KS11", "điểm"),
+    ]),
+    "fx": ("Tỷ giá", [
+        ("USD/VND", "VND=X", "VND"), ("Chỉ số USD (DXY)", "DX-Y.NYB", "điểm"), ("EUR/USD", "EURUSD=X", "USD"),
+        ("USD/JPY", "USDJPY=X", "JPY"), ("USD/CNY", "CNY=X", "CNY"),
+    ]),
+    "cr": ("Crypto", [("Bitcoin", "BTC-USD", "USD"), ("Ethereum", "ETH-USD", "USD")]),
+    "tp": ("Trái phiếu Mỹ", [
+        ("Lợi suất 13 tuần", "^IRX", "%"), ("Lợi suất 10 năm", "^TNX", "%"), ("Lợi suất 30 năm", "^TYX", "%"),
+    ]),
+}
+
+
+def lay_mot_gia(muc):
+    ten, ma, don_vi = muc
+    try:
+        r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ma}", headers=UA, timeout=15,
+                         params={"range": "5d", "interval": "1d"})
+        r.raise_for_status()
+        kq = r.json()["chart"]["result"][0]
+        dong = [c for c in kq["indicators"]["quote"][0].get("close", []) if c is not None]  # than API2 hay thiếu
+        gia = kq["meta"].get("regularMarketPrice") or dong[-1]
+        truoc = dong[-2] if len(dong) >= 2 else kq["meta"].get("chartPreviousClose")
+        return {"ten": ten, "ma": ma, "dv": don_vi, "gia": gia, "doi": gia - truoc, "pt": (gia / truoc - 1) * 100,
+                "t": kq["meta"].get("regularMarketTime")}
+    except Exception as e:
+        log.warning("Không lấy được giá %s (%s): %s", ten, ma, str(e)[:60])
+        return None
+
+
+def lay_bang_gia():
+    """Giá mới nhất và thay đổi so với phiên trước của các mã trong BANG_GIA."""
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        bang = {k: (ten, list(ex.map(lay_mot_gia, ds))) for k, (ten, ds) in BANG_GIA.items()}
+    return {k: {"ten": ten, "ds": [g for g in ds if g]} for k, (ten, ds) in bang.items()}
+
+
 def xuat_html(con, cfg):
     """Ghi tin_tuc.html: tin đã giữ trong NGAY_HTML ngày gần nhất, nhúng dữ liệu vào tin_tuc_template.html."""
     han = (datetime.now(timezone.utc) - timedelta(days=NGAY_HTML)).isoformat()
@@ -391,6 +444,7 @@ def xuat_html(con, cfg):
         "uu_tien": [m.strip().upper() for m in cfg.get("cai_dat", "ma_uu_tien", fallback="").split(",") if m.strip()],
         "nhom": TEN_NHOM,
         "tin": tin,
+        "gia": lay_bang_gia(),
     }
     json_str = json.dumps(du_lieu, ensure_ascii=False).replace("</", "<\\/")
     trang = FILE_TEMPLATE.read_text(encoding="utf-8").replace("/*DU_LIEU*/null", json_str)
