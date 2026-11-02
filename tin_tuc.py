@@ -612,6 +612,7 @@ def lay_gia_trong_nuoc(con):
 
 
 # ---- Tổng quan thị trường HOSE: độ rộng, top tăng/giảm (dữ liệu trang Thống kê của HOSE), VN-Index trong phiên ----
+# Tạm tắt trên trang web (02/11/2026, theo yêu cầu); giữ hàm để bật lại: thêm "thi_truong" vào du_lieu trong xuat_html.
 HOSE_MARKET = "https://api.hsx.vn/mk/api/v1/market/"
 
 
@@ -790,7 +791,6 @@ def xuat_html(con, cfg):
         "nhom": TEN_NHOM,
         "tin": tin,
         "gia": {**({"tn": tn} if (tn := lay_gia_trong_nuoc(con)) else {}), **lay_bang_gia()},
-        "thi_truong": lay_thi_truong(doc_ma()),
         "cong_bo": [{"t": r["thoi_gian"], "ma": r["ma"], "td": r["tieu_de"], "link": r["link"]}
                     for r in con.execute("SELECT * FROM cong_bo WHERE thoi_gian>=? ORDER BY thoi_gian DESC LIMIT 400", (
                         (datetime.now(timezone.utc) - timedelta(days=NGAY_CONG_BO_HTML)).isoformat(),))],
