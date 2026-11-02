@@ -56,7 +56,7 @@ BAO_VI = "site:vneconomy.vn OR site:vietnambiz.vn OR site:thoibaonganhang.vn OR 
 # (tên nguồn, url, nhóm, lọc). lọc=True: chỉ giữ tin có mã CK hoặc từ khóa quan trọng
 NGUON = [
     ("CafeF", "https://cafef.vn/thi-truong-chung-khoan.rss", "ck", False),
-    ("CafeF", "https://cafef.vn/doanh-nghiep.rss", "dn", False),
+    ("CafeF", "https://cafef.vn/doanh-nghiep.rss", "dn", True),
     ("CafeF", "https://cafef.vn/vi-mo-dau-tu.rss", "vm", True),
     ("CafeF", "https://cafef.vn/tai-chinh-ngan-hang.rss", "vm", False),
     ("CafeF", "https://cafef.vn/thi-truong.rss", "hh", True),
@@ -102,7 +102,17 @@ TU_KHOA_VN = [
     "fed", "trái phiếu", "giá vàng", "vàng miếng", "giá dầu", "xăng dầu", "giá thép", "phân bón",
     "cao su", "cà phê", "giá gạo", "đầu tư công", "fdi", "xuất khẩu", "thuế quan", "chứng khoán",
     "vn-index", "vnindex", "khối ngoại", "nâng hạng", "margin", "cổ phiếu", "cổ tức",
+    "lợi nhuận", "doanh thu", "lãi ròng", "kqkd", "kết quả kinh doanh", "niêm yết", "thoái vốn", "sáp nhập",
+    "m&a", "ipo", "cổ đông", "đhđcđ", "tăng vốn", "phát hành", "giá điện",
 ]
+
+# Phân loại theo nội dung tiêu đề (chuyên mục của báo chỉ là gợi ý ban đầu)
+RE_HANG_HOA = re.compile(
+    r"giá (vàng|bạc|dầu|xăng|thép|tôn|cà phê|cao su|gạo|lúa|hồ tiêu|tiêu|heo|lợn|phân bón|than|quặng|đường|điều|"
+    r"sầu riêng|nông sản)|vàng (miếng|nhẫn|sjc)", re.I)
+# Bài bảng giá, lãi suất hằng ngày: nhắc tên nhiều ngân hàng, tiệm vàng nhưng không phải tin doanh nghiệp
+RE_TONG_HOP = re.compile(r"^(giá|lãi suất|tỷ giá|biểu lãi suất)\b.*(ngày|hôm nay|sáng|chiều|\d{1,2}/\d{1,2})", re.I)
+RE_NGU_CANH_MA = r"(?i:\(|mã\s+|cổ phiếu\s+|cp\s+|hose:\s*|hsx:\s*){m}(?![{chu}])"
 TU_KHOA_EN = re.compile(
     r"\b(fed|federal reserve|fomc|powell|interest rates?|rate cut|rate hike|inflation|cpi|"
     r"treasur(y|ies)|bond yields?|oil|crude|opec|gold|copper|steel|iron ore|dollar|tariffs?|"
@@ -172,10 +182,41 @@ def tim_ma(text, tat_ca_ma, ten_goi):
     for m in RE_MA.findall(text):
         if m not in tat_ca_ma or m in ma:
             continue
-        if m in MA_DE_NHAM and not re.search(rf"(?i:\(|mã\s+|cổ phiếu\s+|cp\s+|hose:\s*|hsx:\s*){m}(?![{CHU}])", text):
+        if m in MA_DE_NHAM and not co_ngu_canh_ma(m, text):
             continue
         ma.append(m)
     return ma
+
+
+def co_ngu_canh_ma(m, text):
+    """Có "mã X", "cổ phiếu X", "(X)", "HOSE: X" trong bài: chắc chắn đang nói về cổ phiếu X."""
+    return bool(re.search(RE_NGU_CANH_MA.format(m=m, chu=CHU), text))
+
+
+def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi):
+    """Nhóm tin, mã CK và có giữ tin không, dựa vào nội dung; nhom_nguon là chuyên mục của báo.
+    - Tiêu đề về giá hàng hóa (giá vàng, giá xăng...) -> Hàng hóa.
+    - Tin vĩ mô mà tiêu đề nói về 1-2 doanh nghiệp niêm yết (vd "Vietcombank trích lập...") -> Doanh nghiệp.
+    - Bài bảng giá/lãi suất hằng ngày và bài hàng hóa: chỉ gắn mã khi bài nói rõ về cổ phiếu
+      (tránh gắn PNJ vì "giá vàng tại PNJ", gắn 7 ngân hàng vì bảng lãi suất)."""
+    noi_dung = f"{tieu_de} {tom_tat}"
+    if not tieng_viet:
+        return nhom_nguon, [], bool(TU_KHOA_EN.search(noi_dung)) if loc else True
+    ma = tim_ma(noi_dung, tat_ca_ma, ten_goi) if nhom_nguon != "qt" else []
+    tong_hop = bool(RE_TONG_HOP.search(tieu_de))
+    nhom = nhom_nguon
+    if nhom_nguon != "qt" and RE_HANG_HOA.search(tieu_de):
+        nhom = "hh"
+    elif nhom_nguon == "vm" and not tong_hop:
+        ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)]
+        if 1 <= len(ma_td) <= 2:
+            nhom = "dn"
+    elif nhom_nguon == "dn" and not ma:
+        nhom = "vm"   # chuyên mục Doanh nghiệp nhưng không gắn được công ty niêm yết nào: tin kinh tế chung
+    if tong_hop or nhom == "hh":
+        ma = [m for m in ma if co_ngu_canh_ma(m, noi_dung)]
+    giu = (bool(ma) or any(k in noi_dung.lower() for k in TU_KHOA_VN)) if loc else True
+    return nhom, ma, giu
 
 
 def doc_ngay(e):
@@ -231,25 +272,15 @@ def thu_thap(tat_ca_ma):
             if thoi_gian is None or thoi_gian < gioi_han:
                 continue
             tom_tat = lam_sach(e.get("summary"))[:400]
-            noi_dung = f"{tieu_de} {tom_tat}"
-            ma = tim_ma(noi_dung, tat_ca_ma, ten_goi) if nhom != "qt" else []
-            nhom_tin = nhom
-            if loc:
-                thap = noi_dung.lower()
-                if ".vn/" in url:
-                    giu = bool(ma) or any(k in thap for k in TU_KHOA_VN)
-                else:
-                    giu = bool(TU_KHOA_EN.search(noi_dung))
-                if ma and nhom == "vm":
-                    nhom_tin = "dn"
-            else:
-                giu = True
+            tieng_viet = ".vn/" in url or "hl=vi" in url
+            nhom_tin, ma, giu = phan_loai(tieu_de, tom_tat, nhom, loc, tieng_viet, tat_ca_ma, ten_goi)
             tin.append({
                 "id": hashlib.sha1(link.encode()).hexdigest(),
                 "khoa_td": bo_dau(tieu_de),
                 "nguon": nguon, "nhom": nhom_tin, "tieu_de": tieu_de, "link": link,
                 "tom_tat": tom_tat, "ma": ",".join(ma),
                 "thoi_gian": thoi_gian.isoformat(), "giu": int(giu),
+                "nhom_nguon": nhom, "loc": int(loc), "tieng_viet": int(tieng_viet),
             })
     return tin
 
@@ -262,8 +293,13 @@ def mo_db():
     con.execute("CREATE INDEX IF NOT EXISTS ix_khoa ON tin(khoa_td)")
     con.execute("CREATE INDEX IF NOT EXISTS ix_ma ON tin(ma)")
     # dich: 0 = chưa xét, 1 = đã dịch sang tiếng Việt, 2 = tin tiếng Việt, không cần dịch
-    if "dich" not in {r[1] for r in con.execute("PRAGMA table_info(tin)")}:
+    cot = {r[1] for r in con.execute("PRAGMA table_info(tin)")}
+    if "dich" not in cot:
         con.execute("ALTER TABLE tin ADD COLUMN dich INTEGER DEFAULT 0")
+    # chuyên mục gốc của báo, có lọc không, nguồn tiếng Việt không: để phân loại lại khi đổi luật
+    for ten in ("nhom_nguon", "loc", "tieng_viet"):
+        if ten not in cot:
+            con.execute(f"ALTER TABLE tin ADD COLUMN {ten}")
     con.execute("""CREATE TABLE IF NOT EXISTS bao_cao (
         link TEXT PRIMARY KEY, ma TEXT, ctck TEXT, ctck_ngan TEXT, tieu_de TEXT, loai TEXT, ngay TEXT,
         tom_tat TEXT, khuyen_nghi TEXT, gia_muc_tieu REAL, lay_luc TEXT, da_gui INTEGER DEFAULT 0)""")
@@ -277,12 +313,39 @@ def luu(con, tin):
     for t in tin:
         if con.execute("SELECT 1 FROM tin WHERE id=? OR khoa_td=?", (t["id"], t["khoa_td"])).fetchone():
             continue
-        con.execute("INSERT INTO tin (id,khoa_td,nguon,nhom,tieu_de,link,tom_tat,ma,thoi_gian,lay_luc,giu,da_gui,dich) "
-                    "VALUES (:id,:khoa_td,:nguon,:nhom,:tieu_de,:link,:tom_tat,:ma,:thoi_gian,:lay_luc,:giu,0,0)",
-                    {**t, "lay_luc": bay_gio})
+        con.execute("INSERT INTO tin (id,khoa_td,nguon,nhom,tieu_de,link,tom_tat,ma,thoi_gian,lay_luc,giu,da_gui,dich,"
+                    "nhom_nguon,loc,tieng_viet) VALUES (:id,:khoa_td,:nguon,:nhom,:tieu_de,:link,:tom_tat,:ma,:thoi_gian,"
+                    ":lay_luc,:giu,0,0,:nhom_nguon,:loc,:tieng_viet)", {**t, "lay_luc": bay_gio})
         moi += 1
     con.commit()
     return moi
+
+
+def phan_loai_lai(con, tat_ca_ma, ten_goi):
+    """Áp luật phân loại hiện hành cho tin trong NGAY_HTML ngày gần nhất (trang HTML hiện đúng ngay khi đổi luật).
+    Chỉ có thể bỏ tin (giu 1 -> 0), không bật lại tin đã bỏ."""
+    han = (datetime.now(timezone.utc) - timedelta(days=NGAY_HTML)).isoformat()
+    doi = 0
+    for r in con.execute("SELECT * FROM tin WHERE giu=1 AND thoi_gian>=?", (han,)).fetchall():
+        nhom_goc = r["nhom_nguon"] or r["nhom"]
+        if r["tieng_viet"] is None:
+            if r["nhom"] == "qt":   # tin cũ chưa ghi nguồn: không biết là báo Việt hay báo ngoại
+                continue
+            # tin cũ: chuyên mục Doanh nghiệp CafeF nay có lọc; các nguồn khác giữ như lúc lấy
+            loc, tieng_viet = r["nguon"] == "CafeF" and nhom_goc == "dn", True
+        else:
+            loc, tieng_viet = bool(r["loc"]), bool(r["tieng_viet"])
+            if not tieng_viet:   # tin báo ngoại: đã dịch nên không áp lại bộ lọc từ khóa tiếng Anh
+                continue
+        nhom, ma, giu = phan_loai(r["tieu_de"], r["tom_tat"] or "", nhom_goc, loc, tieng_viet, tat_ca_ma, ten_goi)
+        ma = ",".join(ma)
+        if (nhom, ma, int(giu)) != (r["nhom"], r["ma"], 1):
+            con.execute("UPDATE tin SET nhom=?, ma=?, giu=?, nhom_nguon=? WHERE id=?",
+                        (nhom, ma, int(giu), nhom_goc, r["id"]))
+            doi += 1
+    con.commit()
+    if doi:
+        log.info("Phân loại lại %d tin", doi)
 
 
 def trong_gio_yen_lang(cfg):
@@ -655,6 +718,7 @@ def chay(cfg):
                 ((datetime.now(timezone.utc) - timedelta(days=XOA_SAU_NGAY)).isoformat(),))
     con.commit()
     dich_tin_nuoc_ngoai(con)
+    phan_loai_lai(con, tat_ca_ma, doc_ten_goi())
     lay_bao_cao_ctck(con)
     try:
         xuat_html(con, cfg)
