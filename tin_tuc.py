@@ -570,6 +570,21 @@ def lay_gia_trong_nuoc(con):
                            "mua": x["BuyValue"] / 1e6, "ban": x["SellValue"] / 1e6})
     except Exception as e:
         log.warning("Không lấy được giá vàng SJC: %s", str(e)[:80])
+    if not ds:
+        # SJC chặn máy chủ GitHub (403): dùng bảng giá vàng CafeF, giá theo nghìn đồng/chỉ
+        try:
+            r = requests.get("https://cafef.vn/du-lieu/Ajax/ajaxgoldprice.ashx", params={"index": 11},
+                             headers=UA, timeout=20)
+            r.raise_for_status()
+            theo_ten = {x["name"]: x for x in r.json().get("Data") or []}
+            for ten_cafef, ma, ten in [("Vàng miếng SJC 999.9", "SJC1", "Vàng SJC miếng"),
+                                       ("Nhẫn Trơn PNJ 999.9", "NHAN_PNJ", "Vàng nhẫn PNJ 999.9")]:
+                if ten_cafef in theo_ten:
+                    x = theo_ten[ten_cafef]
+                    ds.append({"ma": ma, "ten": ten, "dv": "triệu đồng/lượng · theo CafeF",
+                               "mua": x["buyPrice"] / 100, "ban": x["sellPrice"] / 100})
+        except Exception as e:
+            log.warning("Không lấy được giá vàng từ CafeF: %s", str(e)[:80])
     try:
         r = requests.get("https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx",
                          headers=UA, timeout=20)
