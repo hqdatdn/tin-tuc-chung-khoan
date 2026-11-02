@@ -611,6 +611,43 @@ def lay_gia_trong_nuoc(con):
     return {"ten": "Trong nước", "kieu": "mua_ban", "ds": ds} if ds else None
 
 
+# ---- Tổng quan thị trường HOSE: độ rộng, top tăng/giảm (dữ liệu trang Thống kê của HOSE), VN-Index trong phiên ----
+HOSE_MARKET = "https://api.hsx.vn/mk/api/v1/market/"
+
+
+def lay_thi_truong(tat_ca_ma):
+    so = lambda s: float(str(s).replace(",", ""))
+    lay = lambda duong_dan: requests.get(HOSE_MARKET + duong_dan, headers=UA, timeout=20).json()["data"]
+    try:
+        # danh sách "top" xin 600 mã thì trả về đủ mọi mã tăng / giảm trong phiên
+        tang = [x for x in lay("top-up-ratio-securities/600") if x["securitySymbol"] in tat_ca_ma]
+        giam = [x for x in lay("top-down-ratio-securities/600") if x["securitySymbol"] in tat_ca_ma]
+        tom_tat = lay("summary/hompage?type=VNINDEX")
+    except Exception as e:
+        log.warning("Không lấy được số liệu thị trường HOSE: %s", str(e)[:80])
+        return None
+    cp = lambda ds: [{"ma": x["securitySymbol"], "gia": so(x["closePrice"]), "pt": x["changePriceRatioValue"]}
+                     for x in ds if isinstance(x["changePriceRatioValue"], (int, float))]   # bỏ mã mới niêm yết (Infinity)
+    tang, giam = cp(tang), cp(giam)
+    kq = {
+        "do_rong": {"tang": len(tang), "giam": len(giam), "dung": max(0, len(tat_ca_ma) - len(tang) - len(giam))},
+        "gtgd": so(tom_tat["gtgd"]), "klgd": so(tom_tat["klgd"]),
+        "tang": sorted(tang, key=lambda x: -x["pt"])[:10], "giam": sorted(giam, key=lambda x: x["pt"])[:10],
+    }
+    try:
+        r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/^VNINDEX.VN", headers=UA, timeout=15,
+                         params={"range": "1d", "interval": "5m"})
+        r.raise_for_status()
+        k = r.json()["chart"]["result"][0]
+        diem = [[t, round(c, 2)] for t, c in zip(k.get("timestamp") or [], k["indicators"]["quote"][0]["close"]) if c]
+        kq["vnindex"] = {"gia": k["meta"].get("regularMarketPrice"), "truoc": k["meta"].get("chartPreviousClose"),
+                         "cao": k["meta"].get("regularMarketDayHigh"), "thap": k["meta"].get("regularMarketDayLow"),
+                         "diem": diem}
+    except Exception as e:
+        log.warning("Không lấy được VN-Index trong phiên: %s", str(e)[:80])
+    return kq
+
+
 # ---- Định giá từ các công ty chứng khoán ----
 # CafeF tổng hợp báo cáo "Cập nhật doanh nghiệp - Khuyến nghị" của mọi CTCK (trang công khai).
 CAFEF_BAO_CAO = "https://cafef.vn/du-lieu/phan-tich-bao-cao/cap-nhat-doanh-nghiep-khuyen-nghi.chn"
@@ -753,6 +790,7 @@ def xuat_html(con, cfg):
         "nhom": TEN_NHOM,
         "tin": tin,
         "gia": {**({"tn": tn} if (tn := lay_gia_trong_nuoc(con)) else {}), **lay_bang_gia()},
+        "thi_truong": lay_thi_truong(doc_ma()),
         "cong_bo": [{"t": r["thoi_gian"], "ma": r["ma"], "td": r["tieu_de"], "link": r["link"]}
                     for r in con.execute("SELECT * FROM cong_bo WHERE thoi_gian>=? ORDER BY thoi_gian DESC LIMIT 400", (
                         (datetime.now(timezone.utc) - timedelta(days=NGAY_CONG_BO_HTML)).isoformat(),))],
