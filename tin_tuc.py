@@ -351,6 +351,11 @@ def mo_db():
         link TEXT PRIMARY KEY, ma TEXT, tieu_de TEXT, thoi_gian TEXT, lay_luc TEXT, da_gui INTEGER DEFAULT 0)""")
     # giá trong nước theo ngày, để tính % thay đổi so với ngày trước
     con.execute("CREATE TABLE IF NOT EXISTS gia_tn (ngay TEXT, ma TEXT, ban REAL, PRIMARY KEY (ngay, ma))")
+    # chuỗi số liệu theo ngày cho biểu đồ (lãi suất tiết kiệm, TPCP 10 năm) khi nguồn chỉ có số hiện tại
+    con.execute("CREATE TABLE IF NOT EXISTS chuoi (ma TEXT, ngay TEXT, gia REAL, PRIMARY KEY (ma, ngay))")
+    # KQKD quý gần nhất của từng mã: doanh thu, LNST công ty mẹ, cùng kỳ năm trước (nghìn đồng)
+    con.execute("""CREATE TABLE IF NOT EXISTS kqkd (
+        ma TEXT PRIMARY KEY, quy TEXT, dt REAL, dt_ck REAL, ln REAL, ln_ck REAL, phat_hien TEXT, cap_nhat TEXT)""")
     con.execute("""CREATE TABLE IF NOT EXISTS bao_cao (
         link TEXT PRIMARY KEY, ma TEXT, ctck TEXT, ctck_ngan TEXT, tieu_de TEXT, loai TEXT, ngay TEXT,
         tom_tat TEXT, khuyen_nghi TEXT, gia_muc_tieu REAL, lay_luc TEXT, da_gui INTEGER DEFAULT 0)""")
@@ -689,6 +694,183 @@ def lay_thi_truong(tat_ca_ma):
     return kq
 
 
+# ---- Biểu đồ: giá vàng, lãi suất ----
+BIG4 = {"AGB", "VCB", "BID", "CTG"}
+# Máy chủ HNX gửi thiếu chứng chỉ trung gian (GlobalSign GCC R3 EV TLS CA 2025). Bổ sung đúng chứng chỉ đó
+# (tải từ GlobalSign) vào bộ chứng chỉ gốc của certifi để vẫn xác thực HTTPS đầy đủ. Chứng chỉ hết hạn 07/2027.
+CHUNG_CHI_HNX = THU_MUC / "chung_chi" / "globalsign_gcc_r3_ev_tls_ca_2025.pem"
+_bo_chung_chi_hnx = None
+
+
+def bo_chung_chi_hnx():
+    global _bo_chung_chi_hnx
+    if _bo_chung_chi_hnx is None:
+        import certifi
+        import tempfile
+        duong_dan = Path(tempfile.gettempdir()) / "tin_tuc_ca_hnx.pem"
+        duong_dan.write_text(Path(certifi.where()).read_text() + "\n" + CHUNG_CHI_HNX.read_text())
+        _bo_chung_chi_hnx = str(duong_dan)
+    return _bo_chung_chi_hnx
+
+
+def lay_yahoo_ngay(ma, khoang="1y"):
+    """[[ngày, giá đóng cửa]] theo ngày từ Yahoo Finance."""
+    r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{ma}", headers=UA, timeout=20,
+                     params={"range": khoang, "interval": "1d"})
+    r.raise_for_status()
+    k = r.json()["chart"]["result"][0]
+    return [[datetime.fromtimestamp(t, VN_TZ).date().isoformat(), round(c, 3)]
+            for t, c in zip(k["timestamp"], k["indicators"]["quote"][0]["close"]) if c is not None]
+
+
+def hnx_loi_suat(ngay):
+    """Đường cong lợi suất TPCP của HNX ngày dd/mm/yyyy: [(kỳ hạn, par yield %)]. Ngày nghỉ thì rỗng."""
+    r = requests.post("https://www.hnx.vn/ModuleReportBonds/Bond_YieldCurve/SearchAndNextPageYieldCurveData",
+                      data={"pDate": ngay}, headers={**UA, "X-Requested-With": "XMLHttpRequest"}, timeout=20,
+                      verify=bo_chung_chi_hnx())
+    r.raise_for_status()
+    txt = html.unescape(re.sub(r"<[^>]+>", "|", r.text))
+    return [(f"{ky} {don_vi}", float(par.replace(",", ".")))
+            for ky, don_vi, _, par in re.findall(r"(\d+)\s*(tháng|năm)\W+([\d,]+)\W+([\d,]+)", txt)]
+
+
+def cap_nhat_tpcp(con):
+    """Lợi suất TPCP VN 10 năm: lần đầu lấy bù 1 năm (mỗi tuần một mốc, tối đa 20 mốc/lần chạy), sau đó mỗi ngày.
+    Trả về đường cong lợi suất mới nhất (các kỳ hạn) để vẽ."""
+    hom_nay = datetime.now(VN_TZ).date()
+    da_co = {r[0] for r in con.execute("SELECT ngay FROM chuoi WHERE ma='TPCP10'")}
+    can = [hom_nay - timedelta(days=i) for i in range(0, 4)] + [hom_nay - timedelta(weeks=w) for w in range(1, 53)]
+    lay_them = 0
+    for d in can:
+        if d.isoformat() in da_co or d.weekday() >= 5 or lay_them >= 20:
+            continue
+        try:
+            ds = hnx_loi_suat(d.strftime("%d/%m/%Y"))
+        except Exception as e:
+            log.warning("Không lấy được lợi suất TPCP HNX: %s", str(e)[:80])
+            break
+        lay_them += 1
+        if dict(ds).get("10 năm"):
+            con.execute("INSERT OR REPLACE INTO chuoi VALUES ('TPCP10', ?, ?)", (d.isoformat(), dict(ds)["10 năm"]))
+    con.commit()
+    for i in range(0, 5):   # đường cong của ngày giao dịch gần nhất
+        d = hom_nay - timedelta(days=i)
+        if d.weekday() < 5:
+            try:
+                ds = hnx_loi_suat(d.strftime("%d/%m/%Y"))
+                if ds:
+                    return {"ngay": d.isoformat(), "ds": ds}
+            except Exception:
+                return None
+    return None
+
+
+def lay_bieu_do(con):
+    """Số liệu cho tab Biểu đồ. Mỗi phần lỗi riêng thì bỏ phần đó, không ảnh hưởng phần khác."""
+    bd = {}
+    try:   # giá vàng SJC 1 năm (CafeF), triệu đồng/lượng; giữ mốc mới nhất mỗi ngày
+        r = requests.get("https://cafef.vn/du-lieu/Ajax/ajaxgoldpricehistory.ashx", params={"index": "1y"},
+                         headers=UA, timeout=20)
+        theo_ngay = {}
+        for x in r.json()["Data"]["goldPriceWorldHistories"]:
+            if x["name"] == "SJC":
+                ngay = datetime.fromisoformat(x["createdAt"].replace("Z", "+00:00")).astimezone(VN_TZ).date().isoformat()
+                theo_ngay.setdefault(ngay, [ngay, x["buyPrice"], x["sellPrice"]])
+        bd["vang_sjc"] = sorted(theo_ngay.values())
+    except Exception as e:
+        log.warning("Không lấy được lịch sử giá vàng SJC: %s", str(e)[:80])
+    for khoa, ma in (("vang_tg", "GC=F"), ("my_10n", "^TNX"), ("my_3t", "^IRX")):
+        try:
+            bd[khoa] = lay_yahoo_ngay(ma)
+        except Exception as e:
+            log.warning("Không lấy được lịch sử %s: %s", ma, str(e)[:80])
+    try:   # lãi suất tiết kiệm: CafeF chỉ có số hiện tại, tự lưu mỗi ngày để thành biểu đồ
+        r = requests.get("https://cafefnew.mediacdn.vn/Images/Uploaded/DuLieuDownload/Liveboard/all_banks_interest_rates.json",
+                         headers=UA, timeout=20)
+        bang = []
+        for x in r.json()["Data"]:
+            ls = {k["deposit"]: k["value"] for k in x["interestRates"]}
+            if ls.get(12):
+                bang.append({"ten": x["name"], "ma": x["symbol"], "t6": ls.get(6), "t12": ls.get(12), "t24": ls.get(24)})
+        hom_nay = datetime.now(VN_TZ).date().isoformat()
+        tb = lambda ds: round(sum(ds) / len(ds), 3) if ds else None
+        for ma_chuoi, gia in (("TK12_TB", tb([b["t12"] for b in bang])),
+                              ("TK12_BIG4", tb([b["t12"] for b in bang if b["ma"] in BIG4]))):
+            if gia:
+                con.execute("INSERT OR REPLACE INTO chuoi VALUES (?, ?, ?)", (ma_chuoi, hom_nay, gia))
+        con.commit()
+        bd["tk_bang"] = sorted(bang, key=lambda b: -b["t12"])
+    except Exception as e:
+        log.warning("Không lấy được lãi suất tiết kiệm: %s", str(e)[:80])
+    bd["tpcp_duong_cong"] = cap_nhat_tpcp(con)
+    chuoi = lambda ma: [list(r) for r in con.execute("SELECT ngay, gia FROM chuoi WHERE ma=? ORDER BY ngay", (ma,))]
+    bd["tk12_tb"], bd["tk12_big4"], bd["tpcp10"] = chuoi("TK12_TB"), chuoi("TK12_BIG4"), chuoi("TPCP10")
+    return bd
+
+
+# ---- KQKD quý toàn HOSE (số liệu báo cáo tài chính trên trang mã cổ phiếu của CafeF) ----
+KQKD_MOI_LAN = 30   # số mã cập nhật mỗi lần chạy; ~400 mã HOSE quay vòng khoảng 2 giờ một lượt
+RE_CONG_BO_BCTC = re.compile(r"báo cáo tài chính|bctc|kết quả kinh doanh|kqkd|giải trình", re.I)
+
+
+def lay_kqkd_ma(ma):
+    """(quý, doanh thu, doanh thu cùng kỳ, LNST cty mẹ, LNST cùng kỳ) của quý gần nhất, đơn vị nghìn đồng."""
+    r = requests.get("https://cafef.vn/du-lieu/Ajax/PageNew/FinanceReport.ashx", headers=UA, timeout=20, params={
+        "Type": 1, "Symbol": ma.lower(), "TotalRow": 5, "EndDate": "4-2030", "ReportType": "QUY", "Sort": "DESC"})
+    ds = (r.json().get("Data") or {}).get("Value") or []
+    if not ds:
+        return None
+    gia_tri = lambda q: {v["Code"]: v["Value"] for v in q["Value"]}
+    moi = ds[0]
+    ck = next((q for q in ds if q["Year"] == moi["Year"] - 1 and q["Quater"] == moi["Quater"]), None)
+    a, b = gia_tri(moi), gia_tri(ck) if ck else {}
+    dt = lambda g: g.get("DTTBHCCDV", g.get("TotalIncome"))   # ngân hàng, bảo hiểm dùng "Tổng doanh thu"
+    return f"{moi['Year']}-Q{moi['Quater']}", dt(a), dt(b), a.get("NetIncome"), b.get("NetIncome")
+
+
+def cap_nhat_kqkd(con, tat_ca_ma):
+    """Ưu tiên mã vừa có công bố BCTC/KQKD trên HOSE, còn lại quay vòng mã lâu chưa cập nhật nhất."""
+    da_co = {r["ma"]: r["cap_nhat"] for r in con.execute("SELECT ma, cap_nhat FROM kqkd")}
+    uu_tien = [r["ma"] for r in con.execute(
+        "SELECT ma, tieu_de, MAX(thoi_gian) t FROM cong_bo GROUP BY ma ORDER BY t DESC LIMIT 60")
+        if r["ma"] in tat_ca_ma and RE_CONG_BO_BCTC.search(r["tieu_de"]) and (da_co.get(r["ma"]) or "") < r["t"]]
+    con_lai = sorted(tat_ca_ma - set(uu_tien), key=lambda m: da_co.get(m) or "")
+    bay_gio = datetime.now(timezone.utc).isoformat()
+    moi = 0
+    for ma in (uu_tien + con_lai)[:KQKD_MOI_LAN]:
+        try:
+            kq = lay_kqkd_ma(ma)
+        except Exception as e:
+            log.warning("Không lấy được KQKD %s: %s", ma, str(e)[:60])
+            continue
+        if not kq:
+            con.execute("INSERT OR REPLACE INTO kqkd (ma, cap_nhat) VALUES (?, ?)", (ma, bay_gio))
+            continue
+        cu = con.execute("SELECT quy, phat_hien FROM kqkd WHERE ma=?", (ma,)).fetchone()
+        cung_quy = cu is not None and cu[0] == kq[0]
+        moi += not cung_quy
+        con.execute("INSERT OR REPLACE INTO kqkd VALUES (?,?,?,?,?,?,?,?)",
+                    (ma, *kq, cu[1] if cung_quy else bay_gio, bay_gio))   # phat_hien: lần đầu thấy số quý này
+    con.commit()
+    if moi:
+        log.info("KQKD: %d mã có số liệu quý mới", moi)
+
+
+def du_lieu_kqkd(con, tat_ca_ma):
+    """Quý đang trong mùa công bố và danh sách mã đã có số quý đó. Quý được chọn là quý mới nhất có từ 10% số mã
+    đã quét trở lên (bỏ qua vài công ty có năm tài chính lệch, vd đã ghi "Q4" khi mọi người đang công bố Q3)."""
+    dem = con.execute("SELECT quy, COUNT(*) FROM kqkd WHERE quy IS NOT NULL GROUP BY quy ORDER BY quy DESC").fetchall()
+    tong = sum(r[1] for r in dem)
+    quy = next((r[0] for r in dem if r[1] >= max(3, tong * 0.1)), dem[0][0] if dem else None)
+    if not quy:
+        return None
+    pt = lambda a, b: round((a / b - 1) * 100, 1) if a is not None and b and b > 0 else None
+    ds = [{"ma": r["ma"], "dt": r["dt"], "dt_pt": pt(r["dt"], r["dt_ck"]), "ln": r["ln"], "ln_pt": pt(r["ln"], r["ln_ck"]),
+           "ln_ck": r["ln_ck"], "t": r["phat_hien"]}
+          for r in con.execute("SELECT * FROM kqkd WHERE quy=?", (quy,))]
+    return {"quy": quy, "tong": len(tat_ca_ma), "da_quet": con.execute("SELECT COUNT(*) FROM kqkd").fetchone()[0], "ds": ds}
+
+
 # ---- Định giá từ các công ty chứng khoán ----
 # CafeF tổng hợp báo cáo "Cập nhật doanh nghiệp - Khuyến nghị" của mọi CTCK (trang công khai).
 CAFEF_BAO_CAO = "https://cafef.vn/du-lieu/phan-tich-bao-cao/cap-nhat-doanh-nghiep-khuyen-nghi.chn"
@@ -831,6 +1013,8 @@ def xuat_html(con, cfg):
         "nhom": TEN_NHOM,
         "tin": tin,
         "gia": {**({"tn": tn} if (tn := lay_gia_trong_nuoc(con)) else {}), **lay_bang_gia()},
+        "bieu_do": lay_bieu_do(con),
+        "kqkd": du_lieu_kqkd(con, doc_ma()),
         "cong_bo": [{"t": r["thoi_gian"], "ma": r["ma"], "td": r["tieu_de"], "link": r["link"]}
                     for r in con.execute("SELECT * FROM cong_bo WHERE thoi_gian>=? ORDER BY thoi_gian DESC LIMIT 400", (
                         (datetime.now(timezone.utc) - timedelta(days=NGAY_CONG_BO_HTML)).isoformat(),))],
@@ -916,6 +1100,7 @@ def chay(cfg):
     phan_loai_lai(con, tat_ca_ma, doc_ten_goi())
     lay_bao_cao_ctck(con)
     lay_cong_bo(con)
+    cap_nhat_kqkd(con, tat_ca_ma)
     try:
         xuat_html(con, cfg)
     except Exception:

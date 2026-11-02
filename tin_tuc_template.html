@@ -110,7 +110,16 @@ table.dg tr:nth-child(even) td { background: var(--zebra); }
 .trong { text-align: center; color: var(--muted); padding: 40px 0; }
 .them { display: block; margin: 12px auto; font: inherit; padding: 8px 18px; border-radius: 8px; border: 1px solid var(--line);
   background: var(--card); color: var(--text); cursor: pointer; }
+/* Tab Biểu đồ, KQKD quý */
+.luoi-bd { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.luoi-bd .dg-the { margin-bottom: 0; }
+.khung-bd { position: relative; height: 230px; }
+.tom-tat-so { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; margin: 4px 0 10px; font-variant-numeric: tabular-nums; }
+.tom-tat-so b { font-size: 16px; }
+table.dg td.am { color: var(--down); }
+table.dg td.duong { color: var(--up); }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 <header class="banner">
@@ -209,11 +218,14 @@ function veTabs(ds) {
   for (const k in DATA.nhom) dem[k] = ds.filter(t => t.nhom === k).length;
   dem.cb = locCongBo().length;
   dem.dg = locBaoCao().length;
-  // "Tất cả" chỉ gồm tin tức; Công bố HOSE và Định giá CTCK là mục riêng
+  dem.kq = locKqkd().length;
+  dem.bd = "";
+  // "Tất cả" chỉ gồm tin tức; Công bố HOSE, Định giá CTCK, KQKD, Biểu đồ là mục riêng
+  const RIENG = { dg: "📊 Định giá CTCK", kq: "📑 KQKD quý", bd: "📈 Biểu đồ", cb: "📢 Công bố HOSE" };
   const tabs = [["tat", "Tất cả"]];
   if (UU.size) tabs.push(["uu", "⭐ Ưu tiên"]);
-  for (const k of ["ck", "dn", "vm", "cg", "dg", "hh", "qt", "cb"])
-    tabs.push([k, k === "dg" ? "📊 Định giá CTCK" : k === "cb" ? "📢 Công bố HOSE" : DATA.nhom[k]]);
+  for (const k of ["ck", "dn", "vm", "cg", "dg", "kq", "hh", "qt", "bd", "cb"])
+    tabs.push([k, RIENG[k] || DATA.nhom[k]]);
   document.getElementById("tabs").innerHTML = tabs.map(([k, ten]) =>
     `<button class="tab ${st.nhom === k ? "chon" : ""}" data-nhom="${k}">${esc(ten)}<span class="so">${dem[k]}</span></button>`).join("");
 }
@@ -317,9 +329,121 @@ function veCongBo() {
   document.getElementById("dsTin").innerHTML = html;
 }
 
+// ---- KQKD quý toàn HOSE ----
+const KQ = DATA.kqkd;
+let sapKq = "moi";
+const ty = x => x === null || x === undefined ? "–" : (x / 1e6).toLocaleString("vi-VN", { maximumFractionDigits: 1 });
+function locKqkd() {
+  if (!KQ) return [];
+  const q = boDau(st.q.trim());
+  return KQ.ds.filter(r => (!q || boDau(r.ma).includes(q)) && (!st.ma || r.ma === st.ma));
+}
+function oPhanTram(pt, nay, truoc) {
+  if (pt === null || pt === undefined) {
+    if (nay !== null && truoc !== null && truoc !== undefined && truoc <= 0 && nay > 0) return `<td class="duong">lỗ → lãi</td>`;
+    return `<td>–</td>`;
+  }
+  return `<td class="${pt > 0 ? "duong" : pt < 0 ? "am" : ""}">${pt > 0 ? "+" : ""}${pt.toLocaleString("vi-VN")}%</td>`;
+}
+function veKqkd() {
+  if (!KQ) { document.getElementById("dsTin").innerHTML = `<div class="trong">Chưa có số liệu KQKD.</div>`; return; }
+  const [nam, q] = KQ.quy.split("-Q");
+  const loc = locKqkd();
+  const SAP = {
+    moi: ["Mới công bố", (a, b) => (b.t || "").localeCompare(a.t || "")],
+    ln_tang: ["LN tăng mạnh", (a, b) => (b.ln_pt ?? -1e9) - (a.ln_pt ?? -1e9)],
+    ln_giam: ["LN giảm mạnh", (a, b) => (a.ln_pt ?? 1e9) - (b.ln_pt ?? 1e9)],
+    ln_lon: ["LN lớn nhất", (a, b) => (b.ln ?? -1e18) - (a.ln ?? -1e18)],
+    dt_lon: ["Doanh thu lớn nhất", (a, b) => (b.dt ?? -1e18) - (a.dt ?? -1e18)],
+  };
+  const ds = [...loc].sort(SAP[sapKq][1]);
+  const tang = KQ.ds.filter(r => r.ln_pt > 0).length, giam = KQ.ds.filter(r => r.ln_pt < 0).length;
+  const lo = KQ.ds.filter(r => r.ln < 0).length;
+  let html = `<section class="dg-the"><h2>Kết quả kinh doanh quý ${q}/${nam} – doanh nghiệp HOSE</h2>
+    <div class="tom-tat-so"><span>Đã có số liệu <b>${KQ.ds.length}</b>/${KQ.tong} doanh nghiệp${KQ.da_quet < KQ.tong
+      ? ` <span style="color:var(--muted)">(đang quét lần đầu: ${KQ.da_quet}/${KQ.tong} mã)</span>` : ""}</span>
+      <span class="tang">LN tăng so cùng kỳ <b>${tang}</b></span><span class="giam">LN giảm <b>${giam}</b></span>
+      <span class="giam">Lỗ <b>${lo}</b></span></div>
+    <div class="tab-gia">${Object.entries(SAP).map(([k, [ten]]) =>
+      `<button class="${k === sapKq ? "chon" : ""}" data-sapkq="${k}">${ten}</button>`).join("")}</div>
+    <div class="bang-cuon"><table class="dg"><thead><tr><th class="trai">Mã</th><th>Doanh thu (tỷ)</th><th>± cùng kỳ</th>
+      <th>LNST cty mẹ (tỷ)</th><th>± cùng kỳ</th><th class="trai">Có số liệu</th></tr></thead><tbody>`;
+  html += ds.slice(0, st.hien).map(r => `<tr>
+      <td class="trai"><button class="chip ${UU.has(r.ma) ? "sao" : ""}" data-ma="${esc(r.ma)}">${esc(r.ma)}</button></td>
+      <td>${ty(r.dt)}</td>${oPhanTram(r.dt_pt)}<td class="${r.ln < 0 ? "am" : ""}">${ty(r.ln)}</td>${oPhanTram(r.ln_pt, r.ln, r.ln_ck)}
+      <td class="trai">${r.t ? new Date(r.t).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) : ""}</td></tr>`).join("");
+  html += `</tbody></table></div>`;
+  if (!ds.length) html += `<div class="trong">Không có mã phù hợp.</div>`;
+  if (ds.length > st.hien) html += `<button class="them" id="xemThem">Xem thêm (${ds.length - st.hien} mã)</button>`;
+  html += `<div class="ghi-chu">Số liệu báo cáo tài chính quý (CafeF), đơn vị tỷ đồng. LNST cty mẹ = lợi nhuận sau thuế của cổ đông
+    công ty mẹ; ngân hàng, bảo hiểm dùng "Tổng doanh thu". Hệ thống quét lần lượt ~${KQ.tong} mã HOSE (khoảng 2 giờ một vòng,
+    mã vừa công bố BCTC trên HOSE được ưu tiên); "Có số liệu" là ngày hệ thống thấy số quý này lần đầu.</div></section>`;
+  document.getElementById("dsTin").innerHTML = html;
+}
+
+// ---- Biểu đồ giá vàng, lãi suất ----
+const BD = DATA.bieu_do || {};
+let bieuDo = [];
+function mau(bien) { return getComputedStyle(document.documentElement).getPropertyValue(bien).trim(); }
+function veDuong(id, nhan, cacDuong, donVi) {
+  const el = document.getElementById(id);
+  if (!el || !window.Chart || !nhan.length) return;
+  bieuDo.push(new Chart(el, {
+    type: "line",
+    data: { labels: nhan, datasets: cacDuong.map(d => ({ label: d.ten, data: d.so, borderColor: d.mau, backgroundColor: d.mau,
+      borderWidth: 2, pointRadius: nhan.length < 15 ? 3 : 0, tension: 0.15, spanGaps: true })) },
+    options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: cacDuong.length > 1, labels: { color: mau("--text"), boxWidth: 12 } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y?.toLocaleString("vi-VN")} ${donVi}` } } },
+      scales: { x: { ticks: { color: mau("--muted"), maxTicksLimit: innerWidth < 600 ? 4 : 6, maxRotation: 0,
+          callback(v) { const s = this.getLabelForValue(v);   // chuỗi dài: tháng/năm; chuỗi ngắn: ngày/tháng
+            if (!s || s.length !== 10) return s;
+            return nhan.length > 60 ? s.slice(5, 7) + "/" + s.slice(2, 4) : s.slice(8) + "/" + s.slice(5, 7); } },
+          grid: { display: false } },
+        y: { ticks: { color: mau("--muted") }, grid: { color: mau("--line") } } } }
+  }));
+}
+function ghepTheoNgay(...chuoi) {   // gộp nhiều chuỗi [[ngày, giá]] về chung một trục ngày
+  const ngay = [...new Set(chuoi.flatMap(c => (c || []).map(x => x[0])))].sort();
+  return [ngay, ...chuoi.map(c => { const m = new Map((c || []).map(x => [x[0], x[1]])); return ngay.map(d => m.get(d) ?? null); })];
+}
+function veBieuDo() {
+  bieuDo.forEach(c => c.destroy()); bieuDo = [];
+  const the = (id, tieuDe, ghiChu, them = "") => `<section class="dg-the"><h2>${tieuDe}</h2>
+    <div class="khung-bd"><canvas id="${id}" role="img" aria-label="${tieuDe}"></canvas></div>${them}
+    <div class="ghi-chu">${ghiChu}</div></section>`;
+  const tk = BD.tk_bang || [];
+  const bangTk = tk.length ? `<div class="bang-cuon" style="max-height:220px;overflow-y:auto;margin-top:8px"><table class="dg">
+    <thead><tr><th class="trai">Ngân hàng</th><th>6 tháng</th><th>12 tháng</th><th>24 tháng</th></tr></thead><tbody>${tk.map(b =>
+      `<tr><td class="trai">${esc(b.ten)}</td><td>${b.t6 ?? "–"}</td><td><b>${b.t12}</b></td><td>${b.t24 ?? "–"}</td></tr>`).join("")}</tbody></table></div>` : "";
+  const ngayTk = (BD.tk12_tb || []).length;
+  const dc = BD.tpcp_duong_cong;
+  document.getElementById("dsTin").innerHTML = `<div class="luoi-bd">
+    ${the("bdSjc", "Giá vàng SJC (triệu đồng/lượng)", "Nguồn: CafeF, 1 năm gần nhất.")}
+    ${the("bdVangTg", "Giá vàng thế giới (USD/ounce)", "Nguồn: Yahoo Finance (hợp đồng tương lai vàng COMEX), 1 năm.")}
+    ${the("bdTk", "Lãi suất tiết kiệm 12 tháng (%/năm)", (ngayTk < 10 ? `Hệ thống bắt đầu lưu từ 02/11/2026, biểu đồ dài dần mỗi ngày. ` : "") +
+      `Trung bình ${tk.length} ngân hàng và trung bình Big4 (Agribank, Vietcombank, BIDV, VietinBank). Nguồn: CafeF.`, bangTk)}
+    ${the("bdTpcp", "Lợi suất trái phiếu Chính phủ VN 10 năm (%)", `Par yield trên đường cong lợi suất của HNX, mỗi tuần một mốc trong
+      quá khứ, mỗi ngày từ nay.${dc ? ` Đường cong ngày ${new Date(dc.ngay).toLocaleDateString("vi-VN")}: ` + dc.ds.map(([k, v]) =>
+      `${k} ${v.toFixed(2)}%`).join(" · ") : ""}`)}
+    ${the("bdMy", "Lãi suất Mỹ (%)", "Lợi suất tín phiếu Kho bạc 3 tháng (bám sát lãi suất điều hành của Fed) và trái phiếu 10 năm. Nguồn: Yahoo Finance.")}
+  </div>`;
+  const sjc = BD.vang_sjc || [];
+  veDuong("bdSjc", sjc.map(x => x[0]), [{ ten: "Bán ra", so: sjc.map(x => x[2]), mau: mau("--down") },
+    { ten: "Mua vào", so: sjc.map(x => x[1]), mau: mau("--up") }], "triệu");
+  const tg = BD.vang_tg || [];
+  veDuong("bdVangTg", tg.map(x => x[0]), [{ ten: "Vàng thế giới", so: tg.map(x => x[1]), mau: mau("--star") }], "USD");
+  const [nTk, tb, big4] = ghepTheoNgay(BD.tk12_tb, BD.tk12_big4);
+  veDuong("bdTk", nTk, [{ ten: "Trung bình các NH", so: tb, mau: mau("--accent") }, { ten: "Big4", so: big4, mau: mau("--c-vm") }], "%");
+  const tp = BD.tpcp10 || [];
+  veDuong("bdTpcp", tp.map(x => x[0]), [{ ten: "TPCP 10 năm", so: tp.map(x => x[1]), mau: mau("--c-dn") }], "%");
+  const [nMy, my3, my10] = ghepTheoNgay(BD.my_3t, BD.my_10n);
+  veDuong("bdMy", nMy, [{ ten: "Tín phiếu 3 tháng", so: my3, mau: mau("--c-qt") }, { ten: "Trái phiếu 10 năm", so: my10, mau: mau("--c-cg") }], "%");
+}
+
 function veTin(ds) {
-  if (st.nhom === "dg" || st.nhom === "cb") {
-    (st.nhom === "dg" ? veDinhGia : veCongBo)();
+  if (["dg", "cb", "kq", "bd"].includes(st.nhom)) {
+    ({ dg: veDinhGia, cb: veCongBo, kq: veKqkd, bd: veBieuDo })[st.nhom]();
     const dl = document.getElementById("dangLoc");
     dl.classList.toggle("hien", !!st.ma);
     dl.innerHTML = st.ma ? `Đang lọc mã <b>${esc(st.ma)}</b><button id="boLocMa">✕ Bỏ lọc</button>` : "";
@@ -401,6 +525,8 @@ document.addEventListener("click", e => {
   if (tab) { st.nhom = tab.dataset.nhom; st.hien = TRANG; ve(); return; }
   const chip = e.target.closest(".chip");
   if (chip) { st.ma = st.ma === chip.dataset.ma ? "" : chip.dataset.ma; st.hien = TRANG; ve(); scrollTo({ top: 0 }); return; }
+  const sk = e.target.closest("button[data-sapkq]");
+  if (sk) { sapKq = sk.dataset.sapkq; ve(); return; }
   const vc = e.target.closest("button[data-vcbs]");
   if (vc) { dmVcbs = vc.dataset.vcbs; luuGhi("tt_vcbs", dmVcbs); ve(); return; }
   if (e.target.id === "boLocMa") { st.ma = ""; ve(); return; }
