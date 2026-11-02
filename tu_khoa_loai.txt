@@ -1,0 +1,4 @@
+# Tin có tiêu đề chứa một trong các cụm từ dưới đây sẽ bị loại (không lên web, không gửi Telegram).
+# Mỗi dòng một cụm từ, không phân biệt hoa thường. Thêm dòng mới khi gặp tin không liên quan.
+# 02/11/2026: tin về Mr Pips (vụ lừa đảo, không liên quan thị trường)
+mr pips

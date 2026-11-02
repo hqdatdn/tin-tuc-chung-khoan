@@ -35,6 +35,7 @@ FILE_BI_MAT = THU_MUC / "bi_mat.ini"
 DB = THU_MUC / "tin_tuc.db"
 FILE_MA = THU_MUC / "ma_hose.csv"
 FILE_TEN = THU_MUC / "ten_goi_khac.csv"
+FILE_TU_KHOA_LOAI = THU_MUC / "tu_khoa_loai.txt"
 FILE_TEMPLATE = THU_MUC / "tin_tuc_template.html"
 FILE_HTML = THU_MUC / "tin_tuc.html"
 NGAY_HTML = 3          # trang HTML hiện tin trong bấy nhiêu ngày
@@ -55,18 +56,18 @@ BAO_VI = "site:vneconomy.vn OR site:vietnambiz.vn OR site:thoibaonganhang.vn OR 
 
 # (tên nguồn, url, nhóm, lọc). lọc=True: chỉ giữ tin có mã CK hoặc từ khóa quan trọng
 NGUON = [
-    ("CafeF", "https://cafef.vn/thi-truong-chung-khoan.rss", "ck", False),
+    ("CafeF", "https://cafef.vn/thi-truong-chung-khoan.rss", "ck", True),
     ("CafeF", "https://cafef.vn/doanh-nghiep.rss", "dn", True),
     ("CafeF", "https://cafef.vn/vi-mo-dau-tu.rss", "vm", True),
     ("CafeF", "https://cafef.vn/tai-chinh-ngan-hang.rss", "vm", False),
     ("CafeF", "https://cafef.vn/thi-truong.rss", "hh", True),
     ("CafeF", "https://cafef.vn/tai-chinh-quoc-te.rss", "qt", True),
-    ("Vietstock", "https://vietstock.vn/830/chung-khoan/co-phieu.rss", "ck", False),
-    ("Vietstock", "https://vietstock.vn/737/doanh-nghiep/hoat-dong-kinh-doanh.rss", "dn", False),
-    ("Vietstock", "https://vietstock.vn/738/doanh-nghiep/co-tuc.rss", "dn", False),
-    ("Vietstock", "https://vietstock.vn/739/chung-khoan/giao-dich-noi-bo.rss", "dn", False),
-    ("Vietstock", "https://vietstock.vn/741/chung-khoan/niem-yet.rss", "dn", False),
-    ("Vietstock", "https://vietstock.vn/764/doanh-nghiep/tang-von-m-a.rss", "dn", False),
+    ("Vietstock", "https://vietstock.vn/830/chung-khoan/co-phieu.rss", "ck", True),
+    ("Vietstock", "https://vietstock.vn/737/doanh-nghiep/hoat-dong-kinh-doanh.rss", "dn", True),
+    ("Vietstock", "https://vietstock.vn/738/doanh-nghiep/co-tuc.rss", "dn", True),
+    ("Vietstock", "https://vietstock.vn/739/chung-khoan/giao-dich-noi-bo.rss", "dn", True),
+    ("Vietstock", "https://vietstock.vn/741/chung-khoan/niem-yet.rss", "dn", True),
+    ("Vietstock", "https://vietstock.vn/764/doanh-nghiep/tang-von-m-a.rss", "dn", True),
     ("Vietstock", "https://vietstock.vn/145/chung-khoan/y-kien-chuyen-gia.rss", "cg", False),
     ("Vietstock", "https://vietstock.vn/1636/nhan-dinh-phan-tich/nhan-dinh-thi-truong.rss", "cg", False),
     ("Vietstock", "https://vietstock.vn/582/nhan-dinh-phan-tich/phan-tich-co-ban.rss", "cg", False),
@@ -76,7 +77,7 @@ NGUON = [
     ("Vietstock", "https://vietstock.vn/2/hang-hoa.rss", "hh", False),
     ("Vietstock", "https://vietstock.vn/773/the-gioi/chung-khoan-the-gioi.rss", "qt", False),
     ("Vietstock", "https://vietstock.vn/772/the-gioi/tai-chinh-quoc-te.rss", "qt", False),
-    ("TNCK", "https://tinnhanhchungkhoan.vn/rss/chung-khoan-2.rss", "ck", False),
+    ("TNCK", "https://tinnhanhchungkhoan.vn/rss/chung-khoan-2.rss", "ck", True),
     ("VnExpress", "https://vnexpress.net/rss/kinh-doanh.rss", "vm", True),
     ("Tuổi Trẻ", "https://tuoitre.vn/rss/kinh-doanh.rss", "vm", True),
     ("Thanh Niên", "https://thanhnien.vn/rss/kinh-te.rss", "vm", True),
@@ -113,13 +114,32 @@ TU_KHOA_DN = [
     "phát hành", "giá điện", "lãi suất", "tỷ giá", "khối ngoại",
 ]
 
+# Chuyên mục Chứng khoán: chỉ giữ tin không gắn mã khi nói về thị trường vốn
+# (lọc tin quy hoạch đô thị, vụ hack tiền điện tử, siêu xe... mà báo đăng ở mục chứng khoán)
+TU_KHOA_CK = [
+    "chứng khoán", "cổ phiếu", "vn-index", "vnindex", "vn30", "khối ngoại", "thanh khoản", "dòng tiền", "phiên",
+    "cổ tức", "niêm yết", "trái phiếu", "etf", "tự doanh", "margin", "nâng hạng", "lãi suất", "tỷ giá",
+    "lợi nhuận", "doanh thu", "kqkd", "kết quả kinh doanh", "cổ đông", "thao túng", "ubcknn", "phái sinh",
+]
+
 # Phân loại theo nội dung tiêu đề (chuyên mục của báo chỉ là gợi ý ban đầu)
 RE_HANG_HOA = re.compile(
     r"giá (vàng|bạc|dầu|xăng|thép|tôn|cà phê|cao su|gạo|lúa|hồ tiêu|tiêu|heo|lợn|phân bón|than|quặng|đường|điều|"
-    r"sầu riêng|nông sản)|vàng (miếng|nhẫn|sjc)", re.I)
+    r"sầu riêng|nông sản)|vàng (miếng|nhẫn|sjc)|^vàng (thế giới |trong nước )?(rơi|lao|tăng|giảm|bật|lập)", re.I)
 # Bài bảng giá, lãi suất hằng ngày: nhắc tên nhiều ngân hàng, tiệm vàng nhưng không phải tin doanh nghiệp
 RE_TONG_HOP = re.compile(r"^(giá|lãi suất|tỷ giá|biểu lãi suất)\b.*(ngày|hôm nay|sáng|chiều|\d{1,2}/\d{1,2})", re.I)
 RE_NGU_CANH_MA = r"(?i:\(|mã\s+|cổ phiếu\s+|cp\s+|hose:\s*|hsx:\s*){m}(?![{chu}])"
+# Sự kiện riêng của một doanh nghiệp (cổ tức, nhân sự, KQKD...): tin ở chuyên mục Chứng khoán vẫn là tin Doanh nghiệp
+RE_SU_KIEN_DN = re.compile(
+    r"cổ tức|nhân sự|tổng giám đốc|chủ tịch|hđqt|hội đồng quản trị|đhđcđ|đại hội cổ đông|phát hành|tăng vốn|"
+    r"kqkd|kết quả kinh doanh|lợi nhuận|doanh thu|lãi (ròng|trước thuế|sau thuế)|thua lỗ|báo lỗ|mua lại cổ phiếu|"
+    r"thoái vốn|sáp nhập|m&a|người nội bộ|người có liên quan|đăng ký (mua|bán)|kế hoạch kinh doanh|"
+    r"báo cáo tài chính|bctc|khởi tố|bắt tạm giam|công bố thông tin|chốt quyền|doanh nghiệp", re.I)
+# Tiêu đề nói về cả thị trường thì vẫn là tin Thị trường chứng khoán.
+# Theo góp ý: lịch công bố thông tin, lịch chốt cổ tức, "nhiều doanh nghiệp..." là tin Doanh nghiệp, không đưa vào đây.
+RE_THI_TRUONG = re.compile(
+    r"vn-?index|vn30|hnx-?index|upcom|thị trường|khối ngoại|thanh khoản|phiên|dòng tiền|nhóm cổ phiếu|"
+    r"nhóm ngành|chỉ số|margin|công ty chứng khoán|ctck|ngành|ubcknn|ủy ban chứng khoán|chứng khoán", re.I)
 TU_KHOA_EN = re.compile(
     r"\b(fed|federal reserve|fomc|powell|interest rates?|rate cut|rate hike|inflation|cpi|"
     r"treasur(y|ies)|bond yields?|oil|crude|opec|gold|copper|steel|iron ore|dollar|tariffs?|"
@@ -220,11 +240,30 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
             nhom = "dn"
     elif nhom_nguon == "dn" and not ma:
         nhom = "vm"   # chuyên mục Doanh nghiệp nhưng không gắn được công ty niêm yết nào: tin kinh tế chung
+    elif nhom_nguon == "ck" and not RE_THI_TRUONG.search(tieu_de) and (
+            RE_SU_KIEN_DN.search(noi_dung) or 1 <= len(ma) <= 2):
+        # tin về một doanh nghiệp cụ thể: "Doanh nghiệp có nữ Tổng giám đốc... phát thông báo quan trọng",
+        # "Taseco Land (TAL) khánh thành...", "Tỷ phú Phạm Nhật Vượng huy động 20.000 người..." (VIC qua VinFast)
+        nhom = "dn"
     if tong_hop or nhom == "hh":
         ma = [m for m in ma if co_ngu_canh_ma(m, noi_dung)]
-    tu_khoa = TU_KHOA_DN if nhom_nguon == "dn" else TU_KHOA_VN
-    giu = (bool(ma) or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
+    tu_khoa = {"dn": TU_KHOA_DN, "ck": TU_KHOA_CK}.get(nhom_nguon, TU_KHOA_VN)
+    giu = (bool(ma) or nhom in ("dn", "hh") or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
+    if any(k in tieu_de.lower() for k in doc_tu_khoa_loai()):
+        giu = False   # người dùng đã góp ý là tin không liên quan
     return nhom, ma, giu
+
+
+_tu_khoa_loai = None
+
+
+def doc_tu_khoa_loai():
+    """Cụm từ trong tu_khoa_loai.txt (mỗi dòng một cụm, dòng # là ghi chú): tiêu đề chứa cụm từ này thì bỏ tin."""
+    global _tu_khoa_loai
+    if _tu_khoa_loai is None:
+        _tu_khoa_loai = [d.strip().lower() for d in FILE_TU_KHOA_LOAI.read_text(encoding="utf-8").splitlines()
+                         if d.strip() and not d.startswith("#")] if FILE_TU_KHOA_LOAI.exists() else []
+    return _tu_khoa_loai
 
 
 def doc_ngay(e):
@@ -343,10 +382,11 @@ def phan_loai_lai(con, tat_ca_ma, ten_goi):
         if r["tieng_viet"] is None:
             if r["nhom"] == "qt":   # tin cũ chưa ghi nguồn: không biết là báo Việt hay báo ngoại
                 continue
-            # tin cũ: chuyên mục Doanh nghiệp CafeF nay có lọc; các nguồn khác giữ như lúc lấy
-            loc, tieng_viet = r["nguon"] == "CafeF" and nhom_goc == "dn", True
+            # tin cũ: chuyên mục Chứng khoán, Doanh nghiệp nay có lọc; các nguồn khác giữ như lúc lấy
+            loc, tieng_viet = nhom_goc in ("ck", "dn"), True
         else:
-            loc, tieng_viet = bool(r["loc"]), bool(r["tieng_viet"])
+            # tin lấy trước khi bật lọc cho chuyên mục Chứng khoán, Doanh nghiệp ghi loc=0
+            loc, tieng_viet = bool(r["loc"]) or nhom_goc in ("ck", "dn"), bool(r["tieng_viet"])
             if not tieng_viet:   # tin báo ngoại: đã dịch nên không áp lại bộ lọc từ khóa tiếng Anh
                 continue
         nhom, ma, giu = phan_loai(r["tieu_de"], r["tom_tat"] or "", nhom_goc, loc, tieng_viet, tat_ca_ma, ten_goi)
