@@ -824,7 +824,7 @@ def soan_tin(rows, uu_tien, nhom_gui):
     gio = datetime.now(VN_TZ).strftime("%H:%M %d/%m")
     tong = sum(len(v) for v in nhom.values())
     dong = [f"<b>📰 Tin mới {gio} — {tong} tin</b>"]
-    thu_tu = ["uu", "dn", "ck", "cg", "vm", "hh", "qt"]
+    thu_tu = ["uu", "ck", "dn", "vm", "cg", "hh", "qt"]   # cùng thứ tự với các tab trên trang web
     for k in thu_tu:
         if k not in nhom:
             continue

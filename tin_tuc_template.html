@@ -207,13 +207,13 @@ function locTheoGioVaTim() {
 function veTabs(ds) {
   const dem = { tat: ds.length, uu: ds.filter(t => t.uu).length };
   for (const k in DATA.nhom) dem[k] = ds.filter(t => t.nhom === k).length;
+  dem.cb = locCongBo().length;
+  dem.dg = locBaoCao().length;
+  // "Tất cả" chỉ gồm tin tức; Công bố HOSE và Định giá CTCK là mục riêng
   const tabs = [["tat", "Tất cả"]];
   if (UU.size) tabs.push(["uu", "⭐ Ưu tiên"]);
-  tabs.push(["cb", "📢 Công bố HOSE"]);
-  dem.cb = locCongBo().length;
-  tabs.push(["dg", "📊 Định giá CTCK"]);
-  dem.dg = locBaoCao().length;
-  for (const k in DATA.nhom) tabs.push([k, DATA.nhom[k]]);
+  for (const k of ["ck", "dn", "vm", "cg", "dg", "hh", "qt", "cb"])
+    tabs.push([k, k === "dg" ? "📊 Định giá CTCK" : k === "cb" ? "📢 Công bố HOSE" : DATA.nhom[k]]);
   document.getElementById("tabs").innerHTML = tabs.map(([k, ten]) =>
     `<button class="tab ${st.nhom === k ? "chon" : ""}" data-nhom="${k}">${esc(ten)}<span class="so">${dem[k]}</span></button>`).join("");
 }
