@@ -209,6 +209,8 @@ function veTabs(ds) {
   for (const k in DATA.nhom) dem[k] = ds.filter(t => t.nhom === k).length;
   const tabs = [["tat", "Tất cả"]];
   if (UU.size) tabs.push(["uu", "⭐ Ưu tiên"]);
+  tabs.push(["cb", "📢 Công bố HOSE"]);
+  dem.cb = locCongBo().length;
   tabs.push(["dg", "📊 Định giá CTCK"]);
   dem.dg = locBaoCao().length;
   for (const k in DATA.nhom) tabs.push([k, DATA.nhom[k]]);
@@ -286,9 +288,38 @@ function veDinhGia() {
   document.getElementById("dsTin").innerHTML = html;
 }
 
+// ---- Công bố thông tin HOSE ----
+const CB = DATA.cong_bo || [];
+for (const c of CB) { c.d = new Date(c.t); c.moi = c.t > lanTruoc; c.khoa = boDau(c.ma + " " + c.td); }
+function locCongBo() {
+  const tu = Date.now() - Math.max(st.gio, 72) * 3600e3;   // công bố thưa hơn tin, nghỉ cuối tuần: xem ít nhất 3 ngày
+  const q = boDau(st.q.trim());
+  return CB.filter(c => c.d >= tu && (!q || c.khoa.includes(q)) && (!st.ma || c.ma === st.ma));
+}
+function veCongBo() {
+  const loc = locCongBo();
+  let html = "", ngayTruoc = "";
+  for (const c of loc.slice(0, st.hien)) {
+    const ngay = nhanNgay(c.d);
+    if (ngay !== ngayTruoc) { html += `<div class="ngay">${ngay}</div>`; ngayTruoc = ngay; }
+    const gio = c.d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    html += `<article class="tin ${UU.has(c.ma) ? "uu" : ""}" style="--mau:var(--accent)">
+      <div class="dong-dau"><span class="gio">${gio}</span>
+        ${c.moi ? '<span class="moi">MỚI</span>' : ""}
+        ${c.ma ? `<button class="chip ${UU.has(c.ma) ? "sao" : ""}" data-ma="${esc(c.ma)}">${esc(c.ma)}</button>` : ""}
+        <span class="nguon">HOSE</span></div>
+      <a class="td" href="${esc(c.link)}" target="_blank" rel="noopener">${esc(c.td)}</a>
+    </article>`;
+  }
+  if (!loc.length) html = `<div class="trong">Không có công bố phù hợp.</div>`;
+  if (loc.length > st.hien) html += `<button class="them" id="xemThem">Xem thêm (${loc.length - st.hien} công bố)</button>`;
+  html += `<div class="ghi-chu">Nguồn: RSS chính thức của Sở GDCK TP.HCM (hsx.vn), công bố của doanh nghiệp niêm yết trên HOSE.</div>`;
+  document.getElementById("dsTin").innerHTML = html;
+}
+
 function veTin(ds) {
-  if (st.nhom === "dg") {
-    veDinhGia();
+  if (st.nhom === "dg" || st.nhom === "cb") {
+    (st.nhom === "dg" ? veDinhGia : veCongBo)();
     const dl = document.getElementById("dangLoc");
     dl.classList.toggle("hien", !!st.ma);
     dl.innerHTML = st.ma ? `Đang lọc mã <b>${esc(st.ma)}</b><button id="boLocMa">✕ Bỏ lọc</button>` : "";
@@ -335,6 +366,20 @@ function veGia() {
   if (!nhomGia) { document.getElementById("bangGia").innerHTML = "<tr><td>Chưa có dữ liệu giá</td></tr>"; return; }
   document.getElementById("tabGia").innerHTML = Object.entries(GIA).map(([k, n]) =>
     `<button class="${k === nhomGia ? "chon" : ""}" data-gia="${k}">${esc(n.ten)}</button>`).join("");
+  if (GIA[nhomGia].kieu === "mua_ban") {   // vàng SJC, tỷ giá Vietcombank: giá mua, giá bán
+    const so = x => x === null || x === undefined ? "–"
+      : x.toLocaleString("vi-VN", { minimumFractionDigits: x < 1000 ? 2 : 0, maximumFractionDigits: x < 1000 ? 2 : 0 });
+    document.getElementById("bangGia").innerHTML =
+      `<tr><td></td><td class="so dv">Mua</td><td class="so dv">Bán</td><td class="so dv">So hôm trước</td></tr>` +
+      GIA[nhomGia].ds.map(g => {
+        const lop = g.pt > 0 ? "tang" : g.pt < 0 ? "giam" : "";
+        const pt = g.pt === null || g.pt === undefined ? "–"
+          : `${g.pt > 0 ? "+" : ""}${g.pt.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+        return `<tr><td>${esc(g.ten)}<span class="dv">${esc(g.dv)}</span></td>
+          <td class="so">${so(g.mua)}</td><td class="so">${so(g.ban)}</td><td class="so ${lop}">${pt}</td></tr>`;
+      }).join("");
+    return;
+  }
   document.getElementById("bangGia").innerHTML = GIA[nhomGia].ds.map(g => {
     const lop = g.doi > 0 ? "tang" : g.doi < 0 ? "giam" : "";
     const mui = g.doi > 0 ? "▲" : g.doi < 0 ? "▼" : "";

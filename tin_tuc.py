@@ -308,6 +308,10 @@ def mo_db():
     for ten in ("nhom_nguon", "loc", "tieng_viet"):
         if ten not in cot:
             con.execute(f"ALTER TABLE tin ADD COLUMN {ten}")
+    con.execute("""CREATE TABLE IF NOT EXISTS cong_bo (
+        link TEXT PRIMARY KEY, ma TEXT, tieu_de TEXT, thoi_gian TEXT, lay_luc TEXT, da_gui INTEGER DEFAULT 0)""")
+    # giá trong nước theo ngày, để tính % thay đổi so với ngày trước
+    con.execute("CREATE TABLE IF NOT EXISTS gia_tn (ngay TEXT, ma TEXT, ban REAL, PRIMARY KEY (ngay, ma))")
     con.execute("""CREATE TABLE IF NOT EXISTS bao_cao (
         link TEXT PRIMARY KEY, ma TEXT, ctck TEXT, ctck_ngan TEXT, tieu_de TEXT, loai TEXT, ngay TEXT,
         tom_tat TEXT, khuyen_nghi TEXT, gia_muc_tieu REAL, lay_luc TEXT, da_gui INTEGER DEFAULT 0)""")
@@ -505,6 +509,93 @@ def lay_bang_gia():
     return {k: {"ten": ten, "ds": [g for g in ds if g]} for k, (ten, ds) in bang.items()}
 
 
+# ---- Công bố thông tin của doanh nghiệp niêm yết (RSS chính thức của HOSE) ----
+HOSE_CONG_BO_RSS = "https://api.hsx.vn/n/api/v1/News/NewsByCateFeed/21"   # 10 công bố mới nhất
+NGAY_CONG_BO_HTML = 7
+
+
+def lay_cong_bo(con):
+    trong = con.execute("SELECT COUNT(*) FROM cong_bo").fetchone()[0] == 0
+    try:
+        r = requests.get(HOSE_CONG_BO_RSS, headers=UA, timeout=20)
+        r.raise_for_status()
+        entries = feedparser.parse(r.content).entries
+    except Exception as e:
+        log.warning("Không đọc được công bố thông tin HOSE: %s", str(e)[:80])
+        return
+    bay_gio = datetime.now(timezone.utc).isoformat()
+    them = 0
+    for e in entries:
+        tieu_de = lam_sach(e.get("title"))
+        # link trong RSS (api.hsx.vn) mở ra trang trắng; trang tin thật nằm ở www.hsx.vn/vi/tin-tuc/...
+        link = e.get("link", "").replace("https://api.hsx.vn/tin-tuc/", "https://www.hsx.vn/vi/tin-tuc/")
+        thoi_gian = doc_ngay(e)
+        if not tieu_de or not link or thoi_gian is None:
+            continue
+        ma, _, noi_dung = tieu_de.partition(":")
+        cur = con.execute("INSERT OR IGNORE INTO cong_bo VALUES (?,?,?,?,?,?)",
+                          (link, ma.strip() if noi_dung else "", (noi_dung or tieu_de).strip(),
+                           thoi_gian.isoformat(), bay_gio, int(trong)))
+        them += cur.rowcount
+    con.commit()
+    if them:
+        log.info("Thêm %d công bố thông tin HOSE", them)
+
+
+def soan_cong_bo(rows, uu_tien):
+    dong = [f"<b>📢 Công bố thông tin HOSE — {len(rows)} tin</b>", ""]
+    for r in sorted(rows, key=lambda r: (r["ma"] not in uu_tien, r["thoi_gian"])):
+        gio = datetime.fromisoformat(r["thoi_gian"]).astimezone(VN_TZ).strftime("%H:%M %d/%m")
+        sao = "⭐ " if r["ma"] in uu_tien else ""
+        dong.append(f"• {sao}<b>[{html.escape(r['ma'])}]</b> {gio} "
+                    f"<a href=\"{html.escape(r['link'])}\">{html.escape(r['tieu_de'])}</a>")
+    return "\n".join(dong)
+
+
+# ---- Giá trong nước: vàng SJC, tỷ giá Vietcombank ----
+SJC_LOAI = {1: "Vàng SJC miếng", 49: "Vàng nhẫn SJC 99,99"}
+VCB_NGOAI_TE = ["USD", "EUR", "CNY", "JPY", "KRW", "SGD", "GBP"]
+
+
+def lay_gia_trong_nuoc(con):
+    """Giá mua/bán vàng SJC (triệu đồng/lượng) và tỷ giá Vietcombank (đồng), % so với ngày trước."""
+    ds = []
+    try:
+        r = requests.post("https://sjc.com.vn/GoldPrice/Services/PriceService.ashx", headers=UA, timeout=20,
+                          data={"method": "GetCurrentGoldPricesByBranch", "BranchId": "1"})
+        r.raise_for_status()
+        for x in r.json()["data"]:
+            if x["Id"] in SJC_LOAI:
+                ds.append({"ma": f"SJC{x['Id']}", "ten": SJC_LOAI[x["Id"]], "dv": "triệu đồng/lượng",
+                           "mua": x["BuyValue"] / 1e6, "ban": x["SellValue"] / 1e6})
+    except Exception as e:
+        log.warning("Không lấy được giá vàng SJC: %s", str(e)[:80])
+    try:
+        r = requests.get("https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx",
+                         headers=UA, timeout=20)
+        r.raise_for_status()
+        so = lambda s: float(s.replace(",", "")) if s and s != "-" else None
+        ty_gia = {m[0]: m for m in re.findall(
+            r'CurrencyCode="(\w+)"[^>]*Buy="([^"]*)"[^>]*Transfer="([^"]*)"[^>]*Sell="([^"]*)"', r.text)}
+        for nt in VCB_NGOAI_TE:
+            if nt in ty_gia:
+                _, mua_tm, mua_ck, ban = ty_gia[nt]
+                ds.append({"ma": nt, "ten": f"{nt}/VND", "dv": "Vietcombank, mua chuyển khoản",
+                           "mua": so(mua_ck), "ban": so(ban)})
+    except Exception as e:
+        log.warning("Không lấy được tỷ giá Vietcombank: %s", str(e)[:80])
+    hom_nay = datetime.now(VN_TZ).date().isoformat()
+    for g in ds:
+        if g["ban"] is None:
+            continue
+        con.execute("INSERT OR REPLACE INTO gia_tn VALUES (?,?,?)", (hom_nay, g["ma"], g["ban"]))
+        truoc = con.execute("SELECT ban FROM gia_tn WHERE ma=? AND ngay<? ORDER BY ngay DESC LIMIT 1",
+                            (g["ma"], hom_nay)).fetchone()
+        g["pt"] = (g["ban"] / truoc[0] - 1) * 100 if truoc and truoc[0] else None
+    con.commit()
+    return {"ten": "Trong nước", "kieu": "mua_ban", "ds": ds} if ds else None
+
+
 # ---- Định giá từ các công ty chứng khoán ----
 # CafeF tổng hợp báo cáo "Cập nhật doanh nghiệp - Khuyến nghị" của mọi CTCK (trang công khai).
 CAFEF_BAO_CAO = "https://cafef.vn/du-lieu/phan-tich-bao-cao/cap-nhat-doanh-nghiep-khuyen-nghi.chn"
@@ -646,7 +737,10 @@ def xuat_html(con, cfg):
         "uu_tien": [m.strip().upper() for m in cfg.get("cai_dat", "ma_uu_tien", fallback="").split(",") if m.strip()],
         "nhom": TEN_NHOM,
         "tin": tin,
-        "gia": lay_bang_gia(),
+        "gia": {**({"tn": tn} if (tn := lay_gia_trong_nuoc(con)) else {}), **lay_bang_gia()},
+        "cong_bo": [{"t": r["thoi_gian"], "ma": r["ma"], "td": r["tieu_de"], "link": r["link"]}
+                    for r in con.execute("SELECT * FROM cong_bo WHERE thoi_gian>=? ORDER BY thoi_gian DESC LIMIT 400", (
+                        (datetime.now(timezone.utc) - timedelta(days=NGAY_CONG_BO_HTML)).isoformat(),))],
         "dinh_gia": {
             "vcbs": lay_khuyen_nghi_vcbs(),
             "bao_cao": [{
@@ -728,6 +822,7 @@ def chay(cfg):
     dich_tin_nuoc_ngoai(con)
     phan_loai_lai(con, tat_ca_ma, doc_ten_goi())
     lay_bao_cao_ctck(con)
+    lay_cong_bo(con)
     try:
         xuat_html(con, cfg)
     except Exception:
@@ -759,6 +854,19 @@ def chay(cfg):
     con.execute("UPDATE tin SET da_gui=1 WHERE da_gui=0")
     con.commit()
     log.info("Đã gửi %d tin trong %d tin nhắn", tong, len(tin_nhan))
+
+    # Công bố thông tin: chỉ gửi mã cổ phiếu HOSE trong ma_hose.csv (bỏ ETF, chứng quyền...)
+    cong_bo = con.execute("SELECT * FROM cong_bo WHERE da_gui=0 ORDER BY thoi_gian").fetchall()
+    if cong_bo:
+        gui = cfg.get("cai_dat", "gui_cong_bo", fallback="yes").strip().lower() != "no"
+        can_gui = [r for r in cong_bo if r["ma"] in tat_ca_ma] if gui else []
+        for i in range(0, len(can_gui), 20):
+            if not gui_telegram(cfg, soan_cong_bo(can_gui[i:i + 20], uu_tien)):
+                return
+        con.execute("UPDATE cong_bo SET da_gui=1 WHERE da_gui=0")
+        con.commit()
+        if can_gui:
+            log.info("Đã gửi %d công bố thông tin", len(can_gui))
 
     bao_cao = con.execute("SELECT * FROM bao_cao WHERE da_gui=0 ORDER BY ngay, lay_luc").fetchall()
     if bao_cao and cfg.get("cai_dat", "gui_bao_cao_ctck", fallback="yes").strip().lower() != "no":
