@@ -356,6 +356,10 @@ def mo_db():
     # KQKD quý gần nhất của từng mã: doanh thu, LNST công ty mẹ, cùng kỳ năm trước (nghìn đồng)
     con.execute("""CREATE TABLE IF NOT EXISTS kqkd (
         ma TEXT PRIMARY KEY, quy TEXT, dt REAL, dt_ck REAL, ln REAL, ln_ck REAL, phat_hien TEXT, cap_nhat TEXT)""")
+    # người xem đăng ký nhận thông báo qua bot; moc = thời điểm đã gửi thông báo tới
+    con.execute("CREATE TABLE IF NOT EXISTS nguoi_dung (chat_id TEXT PRIMARY KEY, ten TEXT, dang_ky TEXT, moc TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS theo_doi (chat_id TEXT, ma TEXT, PRIMARY KEY (chat_id, ma))")
+    con.execute("CREATE TABLE IF NOT EXISTS cau_hinh (khoa TEXT PRIMARY KEY, gia_tri TEXT)")
     con.execute("""CREATE TABLE IF NOT EXISTS bao_cao (
         link TEXT PRIMARY KEY, ma TEXT, ctck TEXT, ctck_ngan TEXT, tieu_de TEXT, loai TEXT, ngay TEXT,
         tom_tat TEXT, khuyen_nghi TEXT, gia_muc_tieu REAL, lay_luc TEXT, da_gui INTEGER DEFAULT 0)""")
@@ -1013,6 +1017,7 @@ def xuat_html(con, cfg):
         "nhom": TEN_NHOM,
         "tin": tin,
         "gia": {**({"tn": tn} if (tn := lay_gia_trong_nuoc(con)) else {}), **lay_bang_gia()},
+        "bot": ten_bot(con, cfg),
         "bieu_do": lay_bieu_do(con),
         "kqkd": du_lieu_kqkd(con, doc_ma()),
         "cong_bo": [{"t": r["thoi_gian"], "ma": r["ma"], "td": r["tieu_de"], "link": r["link"]}
@@ -1085,11 +1090,171 @@ def gui_telegram(cfg, text):
     return r.ok
 
 
+# ---- Bot Telegram cho người xem: mỗi người tự lập danh mục mã và nhận thông báo riêng ----
+# Lệnh: /theodoi HPG FPT, /bo FPT, /danhmuc, /huy. Bot đọc lệnh mỗi lần hệ thống chạy (~10 phút), nên trả lời trễ
+# tối đa chừng đó. chat_id và danh mục của người xem chỉ nằm trong kho dữ liệu (bộ nhớ đệm GitHub), không đưa lên repo.
+TOI_DA_MA_MOI_NGUOI = 30
+HUONG_DAN_BOT = (
+    "Các lệnh:\n"
+    "/theodoi HPG FPT MWG — thêm mã vào danh mục\n"
+    "/bo FPT — bỏ mã\n"
+    "/danhmuc — xem danh mục\n"
+    "/huy — xóa danh mục, ngừng nhận thông báo\n\n"
+    "Khi mã trong danh mục có tin tức, công bố thông tin HOSE, báo cáo định giá của CTCK hoặc KQKD quý mới, "
+    "bot sẽ nhắn riêng cho bạn (kiểm tra khoảng 10 phút một lần, không gửi từ 23h đến 6h).")
+
+
+def goi_bot(cfg, phuong_thuc, **tham_so):
+    token = cfg.get("telegram", "token", fallback="").strip()
+    if not token:
+        return None
+    r = requests.post(f"https://api.telegram.org/bot{token}/{phuong_thuc}", data=tham_so, timeout=20)
+    if not r.ok:
+        log.warning("Bot %s lỗi %s: %s", phuong_thuc, r.status_code, r.text[:150])
+        return None
+    return r.json().get("result")
+
+
+def nhan_tin(cfg, chat_id, text):
+    return goi_bot(cfg, "sendMessage", chat_id=chat_id, text=text, parse_mode="HTML",
+                   disable_web_page_preview="true") is not None
+
+
+def cau_hinh(con, khoa, gia_tri=None):
+    """Đọc (gia_tri=None) hoặc ghi một giá trị trong bảng cau_hinh."""
+    if gia_tri is None:
+        r = con.execute("SELECT gia_tri FROM cau_hinh WHERE khoa=?", (khoa,)).fetchone()
+        return r[0] if r else None
+    con.execute("INSERT OR REPLACE INTO cau_hinh VALUES (?, ?)", (khoa, str(gia_tri)))
+    con.commit()
+
+
+def ten_bot(con, cfg):
+    """Tên bot (vd tinck_dat_bot) để trang web tạo nút mở bot. Lần đầu cũng đăng ký menu lệnh cho bot."""
+    ten = cau_hinh(con, "bot_ten")
+    if not ten:
+        toi = goi_bot(cfg, "getMe")
+        if toi:
+            ten = toi.get("username")
+            cau_hinh(con, "bot_ten", ten)
+            goi_bot(cfg, "setMyCommands", commands=json.dumps([
+                {"command": "theodoi", "description": "Thêm mã vào danh mục, vd /theodoi HPG FPT"},
+                {"command": "bo", "description": "Bỏ mã khỏi danh mục, vd /bo FPT"},
+                {"command": "danhmuc", "description": "Xem danh mục đang theo dõi"},
+                {"command": "huy", "description": "Xóa danh mục, ngừng nhận thông báo"}]))
+    return ten
+
+
+def danh_muc_cua(con, chat_id):
+    return [r[0] for r in con.execute("SELECT ma FROM theo_doi WHERE chat_id=? ORDER BY ma", (chat_id,))]
+
+
+def xu_ly_lenh_bot(con, cfg, tat_ca_ma):
+    """Đọc tin nhắn người xem gửi cho bot (getUpdates) và cập nhật danh mục của từng người."""
+    offset = int(cau_hinh(con, "bot_offset") or 0)
+    cap_nhat = goi_bot(cfg, "getUpdates", offset=offset + 1 if offset else "", timeout=0,
+                       allowed_updates='["message"]')
+    if not cap_nhat:
+        return
+    bay_gio = datetime.now(timezone.utc)
+    for u in cap_nhat:
+        offset = max(offset, u["update_id"])
+        m = u.get("message") or {}
+        chat = m.get("chat") or {}
+        if chat.get("type") != "private" or "text" not in m:
+            continue
+        if bay_gio.timestamp() - m.get("date", 0) > 86400:   # tin nhắn quá 1 ngày (vd lúc mới bật tính năng): bỏ qua
+            continue
+        chat_id = str(chat["id"])
+        tu = m["text"].replace(",", " ").split()
+        lenh = tu[0].split("@")[0].lower() if tu else ""
+        ma_nhap = [x.strip().upper() for x in re.split(r"[\s_\-]+", " ".join(tu[1:])) if x.strip()]
+        if lenh.startswith("/") is False and tu and all(x.upper() in tat_ca_ma for x in tu):
+            lenh, ma_nhap = "/theodoi", [x.upper() for x in tu]   # nhắn thẳng "HPG FPT" cũng được
+        con.execute("INSERT OR IGNORE INTO nguoi_dung VALUES (?, ?, ?, ?)",
+                    (chat_id, chat.get("first_name") or chat.get("username") or "", bay_gio.isoformat(), bay_gio.isoformat()))
+        if lenh in ("/start", "/theodoi", "/them") and ma_nhap:
+            hop_le = [x for x in dict.fromkeys(ma_nhap) if x in tat_ca_ma]
+            sai = [x for x in ma_nhap if x not in tat_ca_ma]
+            dang_co = danh_muc_cua(con, chat_id)
+            them = [x for x in hop_le if x not in dang_co][:max(0, TOI_DA_MA_MOI_NGUOI - len(dang_co))]
+            con.executemany("INSERT OR IGNORE INTO theo_doi VALUES (?, ?)", [(chat_id, x) for x in them])
+            tra_loi = (f"✅ Đã thêm: {', '.join(them)}\n" if them else "") + \
+                      (f"⚠️ Không có trong danh sách cổ phiếu HOSE: {', '.join(sai)}\n" if sai else "") + \
+                      f"\n⭐ Danh mục của bạn: {', '.join(danh_muc_cua(con, chat_id)) or '(trống)'}"
+        elif lenh in ("/bo", "/xoa") and ma_nhap:
+            con.executemany("DELETE FROM theo_doi WHERE chat_id=? AND ma=?", [(chat_id, x) for x in ma_nhap])
+            tra_loi = f"Đã bỏ: {', '.join(ma_nhap)}\n⭐ Danh mục của bạn: {', '.join(danh_muc_cua(con, chat_id)) or '(trống)'}"
+        elif lenh == "/danhmuc":
+            tra_loi = f"⭐ Danh mục của bạn: {', '.join(danh_muc_cua(con, chat_id)) or '(trống)'}\n\n{HUONG_DAN_BOT}"
+        elif lenh in ("/huy", "/stop"):
+            con.execute("DELETE FROM theo_doi WHERE chat_id=?", (chat_id,))
+            tra_loi = "Đã xóa danh mục, bạn sẽ không nhận thông báo nữa. Gửi /theodoi kèm mã để theo dõi lại."
+        elif lenh == "/start":
+            tra_loi = f"Chào bạn! Đây là bot Bản Tin Tự Động - Đạt VCBS.\n\n{HUONG_DAN_BOT}"
+        else:
+            tra_loi = HUONG_DAN_BOT
+        con.commit()
+        nhan_tin(cfg, chat_id, html.escape(tra_loi))
+    cau_hinh(con, "bot_offset", offset)
+
+
+def gui_thong_bao_danh_muc(con, cfg):
+    """Nhắn riêng từng người xem: tin, công bố, báo cáo CTCK, KQKD mới của các mã trong danh mục của họ."""
+    bay_gio = datetime.now(timezone.utc).isoformat()
+    for nguoi in con.execute("SELECT * FROM nguoi_dung").fetchall():
+        dm = set(danh_muc_cua(con, nguoi["chat_id"]))
+        if not dm:
+            continue
+        moc = nguoi["moc"]
+        theo_ma = {m: [] for m in sorted(dm)}
+        for r in con.execute("SELECT * FROM tin WHERE giu=1 AND lay_luc>? AND lay_luc<=? ORDER BY thoi_gian", (moc, bay_gio)):
+            trung = [m for m in r["ma"].split(",") if m in dm]
+            if trung:
+                nguon = r["nguon"] + (" · dịch máy" if r["dich"] == 1 else "")
+                theo_ma[trung[0]].append(f"📰 <a href=\"{html.escape(r['link'])}\">{html.escape(r['tieu_de'])}</a> <i>({html.escape(nguon)})</i>")
+        for r in con.execute("SELECT * FROM cong_bo WHERE lay_luc>? AND lay_luc<=? ORDER BY thoi_gian", (moc, bay_gio)):
+            if r["ma"] in dm:
+                theo_ma[r["ma"]].append(f"📢 Công bố HOSE: <a href=\"{html.escape(r['link'])}\">{html.escape(r['tieu_de'])}</a>")
+        for r in con.execute("SELECT * FROM bao_cao WHERE lay_luc>? AND lay_luc<=?", (moc, bay_gio)):
+            if r["ma"] in dm:
+                them = " · ".join(x for x in [r["ctck_ngan"], r["khuyen_nghi"],
+                                              f"GMT {r['gia_muc_tieu']:,.0f}".replace(",", ".") if r["gia_muc_tieu"] else ""] if x)
+                theo_ma[r["ma"]].append(f"📊 {html.escape(them)}: <a href=\"{html.escape(r['link'])}\">{html.escape(r['tieu_de'])}</a>")
+        for r in con.execute("SELECT * FROM kqkd WHERE phat_hien>? AND phat_hien<=?", (moc, bay_gio)):
+            if r["ma"] in dm and r["quy"]:
+                pt = lambda a, b: f" ({(a / b - 1) * 100:+.1f}%)".replace(".", ",") if a is not None and b and b > 0 else ""
+                ty = lambda x: f"{x / 1e6:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") if x is not None else "–"
+                nam, q = r["quy"].split("-Q")
+                theo_ma[r["ma"]].append(f"📑 KQKD quý {q}/{nam}: doanh thu {ty(r['dt'])} tỷ{pt(r['dt'], r['dt_ck'])}, "
+                                        f"LNST cty mẹ {ty(r['ln'])} tỷ{pt(r['ln'], r['ln_ck'])}")
+        dong = [f"<b>⭐ Danh mục của bạn có tin mới</b>"]
+        for m, ds in theo_ma.items():
+            if ds:
+                dong += ["", f"<b>{m}</b>"] + [f"• {x}" for x in ds]
+        if len(dong) > 1:
+            tin_nhan, hien_tai = [], ""
+            for d in dong:
+                if len(hien_tai) + len(d) + 1 > 3900:
+                    tin_nhan.append(hien_tai)
+                    hien_tai = ""
+                hien_tai += d + "\n"
+            tin_nhan.append(hien_tai)
+            if not all(nhan_tin(cfg, nguoi["chat_id"], t) for t in tin_nhan):
+                continue   # gửi lỗi: giữ mốc cũ, lần sau gửi lại
+        con.execute("UPDATE nguoi_dung SET moc=? WHERE chat_id=?", (bay_gio, nguoi["chat_id"]))
+        con.commit()
+
+
 def chay(cfg):
     tat_ca_ma = doc_ma()
     con = mo_db()
     con.row_factory = sqlite3.Row
     lan_dau = con.execute("SELECT COUNT(*) FROM tin").fetchone()[0] == 0
+    try:
+        xu_ly_lenh_bot(con, cfg, tat_ca_ma)   # trả lời lệnh của người xem cả trong giờ yên lặng
+    except Exception:
+        log.exception("Lỗi xử lý lệnh bot")
     tin = thu_thap(tat_ca_ma)
     moi = luu(con, tin)
     log.info("Đọc %d tin, %d tin mới", len(tin), moi)
@@ -1120,6 +1285,10 @@ def chay(cfg):
     if trong_gio_yen_lang(cfg):
         log.info("Đang trong giờ yên lặng, để dành tin")
         return
+    try:
+        gui_thong_bao_danh_muc(con, cfg)
+    except Exception:
+        log.exception("Lỗi gửi thông báo danh mục")
 
     rows = con.execute("SELECT * FROM tin WHERE da_gui=0 ORDER BY thoi_gian").fetchall()
     uu_tien = {m.strip().upper() for m in cfg.get("cai_dat", "ma_uu_tien", fallback="").split(",") if m.strip()}

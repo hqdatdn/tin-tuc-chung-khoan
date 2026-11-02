@@ -122,6 +122,18 @@ table.dg tr:nth-child(even) td { background: var(--zebra); }
   .dai-bd { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
   .the-bd { flex: 0 0 82%; scroll-snap-align: start; }
 }
+/* Danh mục của tôi */
+.them-dm { display: flex; gap: 6px; margin-bottom: 8px; }
+.them-dm input { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; text-transform: uppercase; }
+.them-dm button { font: inherit; font-size: 14px; border: 0; border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  background: var(--accent); color: #fff; }
+.chip-dm { display: inline-flex; align-items: center; }
+.xoa-dm { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 0 4px; }
+.xoa-dm:hover { color: var(--down); }
+.nut-bot { display: block; text-align: center; margin-top: 10px; padding: 8px; border-radius: 8px; text-decoration: none;
+  font-weight: 600; font-size: 14px; color: #fff; background: #229ed9; }
+.nut-bot:hover { filter: brightness(1.08); }
 /* Tab KQKD quý */
 .tom-tat-so { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; margin: 4px 0 10px; font-variant-numeric: tabular-nums; }
 .tom-tat-so b { font-size: 16px; }
@@ -157,6 +169,15 @@ table.dg td.duong { color: var(--up); }
     </main>
     <aside class="ben">
       <section class="the">
+        <h2>⭐ Danh mục của tôi</h2>
+        <form class="them-dm" id="formDanhMuc"><input id="oDanhMuc" placeholder="Thêm mã, vd HPG FPT" autocomplete="off"
+          aria-label="Thêm mã vào danh mục"><button type="submit">Thêm</button></form>
+        <div class="ma-nong" id="chipDanhMuc"></div>
+        <a class="nut-bot" id="nutBot" target="_blank" rel="noopener">🔔 Nhận thông báo qua Telegram</a>
+        <div class="ghi-chu">Danh mục lưu trên trình duyệt này. Xem mọi tin của các mã ở tab "⭐ Danh mục của tôi".
+          Nút Telegram mở bot kèm sẵn danh mục; bot nhắn riêng khi các mã có tin mới.</div>
+      </section>
+      <section class="the">
         <h2>Bảng giá</h2>
         <div class="tab-gia" id="tabGia"></div>
         <div class="cuon-gia"><table class="gia"><tbody id="bangGia"></tbody></table></div>
@@ -173,7 +194,11 @@ table.dg td.duong { color: var(--up); }
 const DATA = /*DU_LIEU*/null;
 const MAU = { dn: "var(--c-dn)", ck: "var(--c-ck)", cg: "var(--c-cg)", vm: "var(--c-vm)", hh: "var(--c-hh)", qt: "var(--c-qt)" };
 const TEN_NGAN = { dn: "Doanh nghiệp", ck: "Thị trường CK", cg: "Chuyên gia", vm: "Vĩ mô", hh: "Hàng hóa", qt: "Quốc tế" };
-const UU = new Set(DATA.uu_tien);
+// Danh mục của người xem: lưu trong trình duyệt (localStorage), mỗi người một danh mục, không cần đăng nhập.
+// UU = mã được đánh dấu ⭐ = danh mục người xem + mã ưu tiên trong config.ini
+function docDanhMuc() { try { return JSON.parse(localStorage.getItem("tt_danh_muc") || "[]"); } catch (e) { return []; } }
+const DM = new Set(docDanhMuc());
+const UU = new Set([...DATA.uu_tien, ...DM]);
 const TRANG = 150;
 
 function boDau(s) {
@@ -232,7 +257,8 @@ function veTabs(ds) {
   // "Tất cả" chỉ gồm tin tức (cùng dải biểu đồ ở trên); Công bố HOSE, Định giá CTCK, KQKD là mục riêng
   const RIENG = { dg: "📊 Định giá CTCK", kq: "📑 KQKD quý", cb: "📢 Công bố HOSE" };
   const tabs = [["tat", "Tất cả"]];
-  if (UU.size) tabs.push(["uu", "⭐ Ưu tiên"]);
+  tabs.push(["uu", "⭐ Danh mục của tôi"]);
+  dem.uu = UU.size ? locDanhMuc(ds).length : "";
   for (const k of ["ck", "dn", "vm", "cg", "dg", "kq", "hh", "qt", "cb"])
     tabs.push([k, RIENG[k] || DATA.nhom[k]]);
   document.getElementById("tabs").innerHTML = tabs.map(([k, ten]) =>
@@ -443,19 +469,103 @@ function veBieuDo() {   // dải biểu đồ gọn trên trang chính (tab Tấ
   veDuong("bdMy", nMy, [{ ten: "Tín phiếu 3 tháng", so: my3, mau: mau("--c-qt") }, { ten: "Trái phiếu 10 năm", so: my10, mau: mau("--c-cg") }], "%");
 }
 
+// ---- Danh mục của tôi: gom tin, công bố, báo cáo CTCK, KQKD của các mã ⭐ ----
+function doiDanhMuc(ma, them) {
+  ma = ma.trim().toUpperCase();
+  if (!ma) return;
+  them ? DM.add(ma) : DM.delete(ma);
+  luuGhi("tt_danh_muc", JSON.stringify([...DM]));
+  UU.clear(); [...DATA.uu_tien, ...DM].forEach(m => UU.add(m));
+  for (const t of DATA.tin) t.uu = t.ma.some(m => UU.has(m));
+  veTheDanhMuc(); ve();
+}
+function linkBot() {   // mở bot Telegram, gửi sẵn danh mục (tham số start tối đa 64 ký tự)
+  if (!DATA.bot) return "";
+  let s = "";
+  for (const m of DM) { if ((s ? s + "_" + m : m).length > 64) break; s = s ? s + "_" + m : m; }
+  return `https://t.me/${DATA.bot}${s ? "?start=" + s : ""}`;
+}
+function veTheDanhMuc() {
+  const ma = [...DM].sort();
+  document.getElementById("chipDanhMuc").innerHTML = ma.length
+    ? ma.map(m => `<span class="chip-dm"><button class="chip sao" data-ma="${esc(m)}">${esc(m)}</button><button class="xoa-dm" data-xoa-dm="${esc(m)}" aria-label="Bỏ ${esc(m)}">✕</button></span>`).join("")
+    : `<span class="cap-nhat">Chưa có mã nào. Gõ mã ở trên, hoặc bấm vào một mã bất kỳ rồi chọn "☆ Thêm vào danh mục".</span>`;
+  const nut = document.getElementById("nutBot");
+  nut.style.display = DATA.bot ? "" : "none";
+  nut.href = linkBot();
+}
+function locDanhMuc(ds) {
+  if (!UU.size) return [];
+  const tu = Date.now() - Math.max(st.gio, 72) * 3600e3;
+  return [
+    ...ds.filter(t => t.uu).map(t => ({ loai: "tin", d: t.d, x: t })),
+    ...CB.filter(c => UU.has(c.ma) && c.d >= tu).map(c => ({ loai: "cb", d: c.d, x: c })),
+    ...DG.bao_cao.filter(b => UU.has(b.ma)).map(b => ({ loai: "bc", d: new Date(b.ngay), x: b })),
+  ].filter(m => !st.ma || (m.loai === "tin" ? m.x.ma.includes(st.ma) : m.x.ma === st.ma)).sort((a, b) => b.d - a.d);
+}
+function veDanhMuc(ds) {
+  if (!UU.size) {
+    document.getElementById("dsTin").innerHTML = `<section class="dg-the"><h2>Danh mục của tôi</h2>
+      <p>Thêm các mã bạn quan tâm vào ô <b>"⭐ Danh mục của tôi"</b> (cột bên phải, trên điện thoại ở phía trên) hoặc bấm vào
+      một mã bất kỳ rồi chọn <b>"☆ Thêm vào danh mục"</b>. Tab này sẽ gom tin tức, công bố HOSE, báo cáo định giá và
+      KQKD quý của các mã đó. Danh mục lưu ngay trên trình duyệt này.</p>
+      ${DATA.bot ? `<p>Muốn nhận thông báo khi không mở trang: bấm <b>"🔔 Nhận thông báo qua Telegram"</b>.</p>` : ""}</section>`;
+    return;
+  }
+  const loc = locDanhMuc(ds);
+  const kq = KQ ? KQ.ds.filter(r => UU.has(r.ma) && (!st.ma || r.ma === st.ma)) : [];
+  let html = "";
+  if (kq.length) {
+    const [nam, q] = KQ.quy.split("-Q");
+    html += `<section class="dg-the"><h2>KQKD quý ${q}/${nam} của danh mục</h2><div class="bang-cuon"><table class="dg">
+      <thead><tr><th class="trai">Mã</th><th>Doanh thu (tỷ)</th><th>± cùng kỳ</th><th>LNST cty mẹ (tỷ)</th><th>± cùng kỳ</th></tr></thead>
+      <tbody>${kq.map(r => `<tr><td class="trai"><button class="chip sao" data-ma="${esc(r.ma)}">${esc(r.ma)}</button></td>
+        <td>${ty(r.dt)}</td>${oPhanTram(r.dt_pt)}<td class="${r.ln < 0 ? "am" : ""}">${ty(r.ln)}</td>${oPhanTram(r.ln_pt, r.ln, r.ln_ck)}</tr>`).join("")}
+      </tbody></table></div></section>`;
+  }
+  let ngayTruoc = "";
+  const NHAN = { cb: "Công bố HOSE", bc: "Báo cáo CTCK" };
+  for (const m of loc.slice(0, st.hien)) {
+    const ngay = nhanNgay(m.d);
+    if (ngay !== ngayTruoc) { html += `<div class="ngay">${ngay}</div>`; ngayTruoc = ngay; }
+    const x = m.x, dsMa = m.loai === "tin" ? x.ma : [x.ma].filter(Boolean);
+    const chips = dsMa.map(c => `<button class="chip ${UU.has(c) ? "sao" : ""}" data-ma="${esc(c)}">${esc(c)}</button>`).join("");
+    const gio = m.loai === "bc" ? "" : m.d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const nhan = m.loai === "tin" ? TEN_NGAN[x.nhom] : NHAN[m.loai];
+    const mauVien = m.loai === "tin" ? MAU[x.nhom] : "var(--accent)";
+    const them = m.loai === "bc" ? `${x.kn ? `<span class="kn ${KN_TOT.test(x.kn) ? "tot" : KN_XAU.test(x.kn) ? "xau" : ""}">${esc(x.kn)}</span>` : ""}
+      ${x.gmt ? `<span class="gmt">GMT ${x.gmt.toLocaleString("vi-VN")}</span>` : ""}` : "";
+    const nguon = m.loai === "tin" ? x.nguon + (x.dich ? " · dịch máy" : "") : m.loai === "cb" ? "HOSE" : x.ctck_ngan || "";
+    html += `<article class="tin uu" style="--mau:${mauVien}">
+      <div class="dong-dau">${gio ? `<span class="gio">${gio}</span>` : ""}<span class="nhan">${nhan}</span>
+        ${x.moi ? '<span class="moi">MỚI</span>' : ""}${chips}${them}<span class="nguon">${esc(nguon)}</span></div>
+      <a class="td" href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.td)}</a>
+      ${m.loai === "tin" && x.sapo ? `<div class="sapo">${esc(x.sapo)}</div>` : ""}
+    </article>`;
+  }
+  if (!loc.length && !kq.length) html = `<div class="trong">Chưa có tin nào về các mã trong danh mục trong khoảng thời gian này.</div>`;
+  if (loc.length > st.hien) html += `<button class="them" id="xemThem">Xem thêm (${loc.length - st.hien})</button>`;
+  document.getElementById("dsTin").innerHTML = html;
+}
+function veDangLoc() {
+  const dl = document.getElementById("dangLoc");
+  dl.classList.toggle("hien", !!st.ma);
+  dl.innerHTML = st.ma ? `Đang lọc mã <b>${esc(st.ma)}</b>
+    <button data-doi-dm="${esc(st.ma)}">${DM.has(st.ma) ? "★ Bỏ khỏi danh mục" : "☆ Thêm vào danh mục"}</button>
+    <button id="boLocMa">✕ Bỏ lọc</button>` : "";
+}
+
 function veTin(ds) {
   // dải biểu đồ chỉ hiện ở trang chính (tab Tất cả); vẽ một lần, sau đó chỉ ẩn/hiện
   const khu = document.getElementById("khuBieuDo");
   khu.style.display = st.nhom === "tat" ? "" : "none";
   if (st.nhom === "tat" && !bieuDo.length) veBieuDo();
-  if (["dg", "cb", "kq"].includes(st.nhom)) {
-    ({ dg: veDinhGia, cb: veCongBo, kq: veKqkd })[st.nhom]();
-    const dl = document.getElementById("dangLoc");
-    dl.classList.toggle("hien", !!st.ma);
-    dl.innerHTML = st.ma ? `Đang lọc mã <b>${esc(st.ma)}</b><button id="boLocMa">✕ Bỏ lọc</button>` : "";
+  if (["dg", "cb", "kq", "uu"].includes(st.nhom)) {
+    ({ dg: veDinhGia, cb: veCongBo, kq: veKqkd, uu: () => veDanhMuc(ds) })[st.nhom]();
+    veDangLoc();
     return;
   }
-  const loc = st.nhom === "tat" ? ds : st.nhom === "uu" ? ds.filter(t => t.uu) : ds.filter(t => t.nhom === st.nhom);
+  const loc = st.nhom === "tat" ? ds : ds.filter(t => t.nhom === st.nhom);
   const hien = loc.slice(0, st.hien);
   let html = "", ngayTruoc = "";
   for (const t of hien) {
@@ -474,10 +584,7 @@ function veTin(ds) {
   if (!loc.length) html = `<div class="trong">Không có tin phù hợp. Thử mở rộng khoảng thời gian hoặc xóa bộ lọc.</div>`;
   if (loc.length > st.hien) html += `<button class="them" id="xemThem">Xem thêm (${loc.length - st.hien} tin)</button>`;
   document.getElementById("dsTin").innerHTML = html;
-
-  const dl = document.getElementById("dangLoc");
-  dl.classList.toggle("hien", !!st.ma);
-  dl.innerHTML = st.ma ? `Đang lọc mã <b>${esc(st.ma)}</b><button id="boLocMa">✕ Bỏ lọc</button>` : "";
+  veDangLoc();
 }
 
 function ve() {
@@ -531,6 +638,10 @@ document.addEventListener("click", e => {
   if (tab) { st.nhom = tab.dataset.nhom; st.hien = TRANG; ve(); return; }
   const chip = e.target.closest(".chip");
   if (chip) { st.ma = st.ma === chip.dataset.ma ? "" : chip.dataset.ma; st.hien = TRANG; ve(); scrollTo({ top: 0 }); return; }
+  const xoa = e.target.closest("button[data-xoa-dm]");
+  if (xoa) { doiDanhMuc(xoa.dataset.xoaDm, false); return; }
+  const doi = e.target.closest("button[data-doi-dm]");
+  if (doi) { doiDanhMuc(doi.dataset.doiDm, !DM.has(doi.dataset.doiDm)); return; }
   const sk = e.target.closest("button[data-sapkq]");
   if (sk) { sapKq = sk.dataset.sapkq; ve(); return; }
   const vc = e.target.closest("button[data-vcbs]");
@@ -538,6 +649,13 @@ document.addEventListener("click", e => {
   if (e.target.id === "boLocMa") { st.ma = ""; ve(); return; }
   if (e.target.id === "xemThem") { st.hien += TRANG; ve(); }
 });
+document.getElementById("formDanhMuc").addEventListener("submit", e => {
+  e.preventDefault();
+  const o = document.getElementById("oDanhMuc");
+  o.value.split(/[\s,;]+/).filter(Boolean).forEach(m => doiDanhMuc(m, true));
+  o.value = "";
+});
+veTheDanhMuc();
 const oTim = document.getElementById("timKiem");
 oTim.value = st.q;
 oTim.addEventListener("input", () => { st.q = oTim.value; st.hien = TRANG; ve(); });
