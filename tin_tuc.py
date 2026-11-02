@@ -264,6 +264,9 @@ def mo_db():
     # dich: 0 = chưa xét, 1 = đã dịch sang tiếng Việt, 2 = tin tiếng Việt, không cần dịch
     if "dich" not in {r[1] for r in con.execute("PRAGMA table_info(tin)")}:
         con.execute("ALTER TABLE tin ADD COLUMN dich INTEGER DEFAULT 0")
+    con.execute("""CREATE TABLE IF NOT EXISTS bao_cao (
+        link TEXT PRIMARY KEY, ma TEXT, ctck TEXT, ctck_ngan TEXT, tieu_de TEXT, loai TEXT, ngay TEXT,
+        tom_tat TEXT, khuyen_nghi TEXT, gia_muc_tieu REAL, lay_luc TEXT, da_gui INTEGER DEFAULT 0)""")
     return con
 
 
@@ -431,6 +434,134 @@ def lay_bang_gia():
     return {k: {"ten": ten, "ds": [g for g in ds if g]} for k, (ten, ds) in bang.items()}
 
 
+# ---- Định giá từ các công ty chứng khoán ----
+# CafeF tổng hợp báo cáo "Cập nhật doanh nghiệp - Khuyến nghị" của mọi CTCK (trang công khai).
+CAFEF_BAO_CAO = "https://cafef.vn/du-lieu/phan-tich-bao-cao/cap-nhat-doanh-nghiep-khuyen-nghi.chn"
+# VCBS công khai danh mục khuyến nghị kèm giá mục tiêu trên trang Trung tâm phân tích.
+VCBS_KHUYEN_NGHI = [("CPCTC", "Dài hạn"), ("TPDN", "Ngắn hạn"), ("CPTT", "Cổ tức")]
+BAO_CAO_TOI_DA_MOI_LAN = 15
+NGAY_BAO_CAO_HTML = 60
+
+KHUYEN_NGHI = ["KÉM KHẢ QUAN", "KHẢ QUAN", "NẮM GIỮ", "TRUNG LẬP", "PHÙ HỢP THỊ TRƯỜNG", "TÍCH LŨY",
+               "THEO DÕI", "MUA", "BÁN", "OUTPERFORM", "UNDERPERFORM", "ACCUMULATE", "NEUTRAL", "BUY", "HOLD", "SELL"]
+_KN = "|".join(map(re.escape, KHUYEN_NGHI))
+RE_KN_SAU_NHAN = re.compile(rf"(?:khuyến nghị|recommendation)\s*(?:đầu tư)?\s*[:\-–]?\s*({_KN})(?![{CHU}])", re.I)
+RE_KN_VIET_HOA = re.compile(rf"(?<![{CHU}])({_KN})(?![{CHU}])")  # chữ in hoa trong tiêu đề, vd "HPG/MUA"
+RE_GMT = re.compile(r"giá mục tiêu|GMT|giá MT|target price", re.I)
+RE_SO = re.compile(r"\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?")
+
+
+def so_gia(s):
+    """'41.100' / '35,900' -> 41100 / 35900; '37,39' (nghìn đồng) -> 37390."""
+    if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", s):
+        return float(re.sub(r"[.,]", "", s))
+    v = float(s.replace(",", "."))
+    return v * 1000 if v < 1000 else v
+
+
+def doc_gmt(text):
+    """Số đầu tiên sau chữ 'giá mục tiêu' mà hợp lý là giá: bỏ qua năm (2027), % và số dính chữ (Q3)."""
+    for m in RE_GMT.finditer(text):
+        doan = text[m.end():m.end() + 60]
+        for n in RE_SO.finditer(doan):
+            s = n.group()
+            truoc, sau = doan[n.start() - 1:n.start()], doan[n.end():n.end() + 2].strip()
+            if (truoc and truoc.isalpha()) or sau.startswith("%") or re.fullmatch(r"20\d\d", s):
+                continue
+            v = so_gia(s)
+            if 1000 <= v <= 2_000_000:
+                return v
+    return None
+
+
+def doc_khuyen_nghi(tieu_de, tom_tat):
+    """Khuyến nghị và giá mục tiêu nếu tiêu đề hoặc tóm tắt có ghi; không có thì None."""
+    m = RE_KN_SAU_NHAN.search(tom_tat) or RE_KN_SAU_NHAN.search(tieu_de) or RE_KN_VIET_HOA.search(tieu_de)
+    kn = m.group(1).upper() if m else None
+    return kn, doc_gmt(tieu_de) or doc_gmt(tom_tat)
+
+
+def doc_chi_tiet_bao_cao(link):
+    h = requests.get(link, headers=UA, timeout=20).text
+    txt = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", re.sub(r"<script.*?</script>", " ", h, flags=re.S))))
+    lay = lambda mau: (re.search(mau, txt) or [None, ""])[1].strip()
+    tieu_de = html.unescape((re.search(r"<title>(.*?)\s*\|", h, re.S) or [None, ""])[1]).strip()
+    ngay = lay(r"Ngày phát hành:\s*(\d{2}/\d{2}/\d{4})")
+    i = txt.find("Tóm tắt AI")
+    tom_tat = txt[i + len("Tóm tắt AI"):txt.find("Khuyến cáo:", i)].strip() if i >= 0 else ""
+    ctck = lay(r"Nguồn báo cáo:\s*(.+?)\s*Loại báo cáo:")
+    kn, gmt = doc_khuyen_nghi(tieu_de, tom_tat)
+    return {
+        "link": link, "ma": lay(r"Mã CK:\s*([A-Z0-9]{3,4})\b"), "ctck": ctck,
+        "ctck_ngan": ctck.rsplit(" - ", 1)[-1] if " - " in ctck else ctck,
+        "tieu_de": tieu_de, "loai": lay(r"Loại báo cáo:\s*(.+?)\s*Ngày phát hành:"),
+        "ngay": datetime.strptime(ngay, "%d/%m/%Y").date().isoformat() if ngay else "",
+        "tom_tat": tom_tat[:1200], "khuyen_nghi": kn, "gia_muc_tieu": gmt,
+    }
+
+
+def lay_bao_cao_ctck(con):
+    """Báo cáo mới trên CafeF: chỉ đọc trang chi tiết của báo cáo chưa có trong kho."""
+    trong = con.execute("SELECT COUNT(*) FROM bao_cao").fetchone()[0] == 0
+    try:
+        h = requests.get(CAFEF_BAO_CAO, headers=UA, timeout=20).text
+    except Exception as e:
+        log.warning("Không đọc được danh sách báo cáo CafeF: %s", str(e)[:80])
+        return
+    links = ["https://cafef.vn" + l for l in dict.fromkeys(re.findall(r'href="(/du-lieu/report/[^"?]+\.chn)', h))]
+    moi = [l for l in links if not con.execute("SELECT 1 FROM bao_cao WHERE link=?", (l,)).fetchone()]
+    bay_gio = datetime.now(timezone.utc).isoformat()
+    them = 0
+    for link in moi[:BAO_CAO_TOI_DA_MOI_LAN]:
+        try:
+            bc = doc_chi_tiet_bao_cao(link)
+        except Exception as e:
+            log.warning("Không đọc được báo cáo %s: %s", link, str(e)[:80])
+            continue
+        # Lần đầu chỉ ghi nhận báo cáo đang có, không gửi dồn lên Telegram
+        con.execute("INSERT OR IGNORE INTO bao_cao (link,ma,ctck,ctck_ngan,tieu_de,loai,ngay,tom_tat,khuyen_nghi,"
+                    "gia_muc_tieu,lay_luc,da_gui) VALUES (:link,:ma,:ctck,:ctck_ngan,:tieu_de,:loai,:ngay,:tom_tat,"
+                    ":khuyen_nghi,:gia_muc_tieu,:lay_luc,:da_gui)", {**bc, "lay_luc": bay_gio, "da_gui": int(trong)})
+        them += 1
+    con.commit()
+    if them:
+        log.info("Thêm %d báo cáo CTCK mới", them)
+
+
+def lay_khuyen_nghi_vcbs():
+    """Danh mục khuyến nghị VCBS, dữ liệu của trang Trung tâm phân tích VCBS (giá tính bằng nghìn đồng).
+    Mỗi danh mục có cột riêng (dài hạn: giá mục tiêu; ngắn hạn: vùng mua/cắt lỗ/chốt lời; cổ tức: tỷ suất),
+    nên giữ nguyên tên cột VCBS dùng."""
+    ket_qua = {}
+    for ma_dm, ten in VCBS_KHUYEN_NGHI:
+        try:
+            r = requests.get("https://www.vcbs.com.vn/api/v1/ttpt-recommendations", headers=UA, timeout=20,
+                             params={"category_code": ma_dm, "locale": "vi"})
+            r.raise_for_status()
+            d = r.json()["data"]
+            cot = [(k, re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", v)).strip())
+                   for k, v in (d.get("columnsMapping") or {}).items()]
+            ket_qua[ma_dm] = {"ten": ten, "ngay": d.get("recommendationDate"), "cot": cot,
+                              "ds": d.get("columnsData") or []}
+        except Exception as e:
+            log.warning("Không lấy được khuyến nghị VCBS %s: %s", ten, str(e)[:80])
+    return ket_qua
+
+
+def soan_bao_cao(rows):
+    """Tin nhắn Telegram cho báo cáo CTCK mới."""
+    dong = [f"<b>📊 Báo cáo định giá mới từ CTCK — {len(rows)} báo cáo</b>", ""]
+    for r in rows:
+        phan = [f"<b>[{r['ma']}]</b>" if r["ma"] else "", html.escape(r["ctck_ngan"] or "")]
+        if r["khuyen_nghi"]:
+            phan.append(f"<b>{html.escape(r['khuyen_nghi'])}</b>")
+        if r["gia_muc_tieu"]:
+            phan.append(f"GMT {r['gia_muc_tieu']:,.0f}".replace(",", "."))
+        dong.append("• " + " · ".join(p for p in phan if p))
+        dong.append(f"   <a href=\"{html.escape(r['link'])}\">{html.escape(r['tieu_de'])}</a>")
+    return "\n".join(dong)
+
+
 def xuat_html(con, cfg):
     """Ghi tin_tuc.html: tin đã giữ trong NGAY_HTML ngày gần nhất, nhúng dữ liệu vào tin_tuc_template.html."""
     han = (datetime.now(timezone.utc) - timedelta(days=NGAY_HTML)).isoformat()
@@ -445,6 +576,14 @@ def xuat_html(con, cfg):
         "nhom": TEN_NHOM,
         "tin": tin,
         "gia": lay_bang_gia(),
+        "dinh_gia": {
+            "vcbs": lay_khuyen_nghi_vcbs(),
+            "bao_cao": [{
+                "ngay": r["ngay"], "ma": r["ma"], "ctck": r["ctck"], "ctck_ngan": r["ctck_ngan"], "td": r["tieu_de"],
+                "link": r["link"], "tom_tat": r["tom_tat"], "kn": r["khuyen_nghi"], "gmt": r["gia_muc_tieu"],
+            } for r in con.execute("SELECT * FROM bao_cao WHERE ngay>=? ORDER BY ngay DESC, lay_luc DESC LIMIT 300", (
+                (datetime.now(VN_TZ) - timedelta(days=NGAY_BAO_CAO_HTML)).date().isoformat(),))],
+        },
     }
     json_str = json.dumps(du_lieu, ensure_ascii=False).replace("</", "<\\/")
     trang = FILE_TEMPLATE.read_text(encoding="utf-8").replace("/*DU_LIEU*/null", json_str)
@@ -516,6 +655,7 @@ def chay(cfg):
                 ((datetime.now(timezone.utc) - timedelta(days=XOA_SAU_NGAY)).isoformat(),))
     con.commit()
     dich_tin_nuoc_ngoai(con)
+    lay_bao_cao_ctck(con)
     try:
         xuat_html(con, cfg)
     except Exception:
@@ -547,6 +687,16 @@ def chay(cfg):
     con.execute("UPDATE tin SET da_gui=1 WHERE da_gui=0")
     con.commit()
     log.info("Đã gửi %d tin trong %d tin nhắn", tong, len(tin_nhan))
+
+    bao_cao = con.execute("SELECT * FROM bao_cao WHERE da_gui=0 ORDER BY ngay, lay_luc").fetchall()
+    if bao_cao and cfg.get("cai_dat", "gui_bao_cao_ctck", fallback="yes").strip().lower() != "no":
+        for i in range(0, len(bao_cao), 12):   # 12 báo cáo mỗi tin nhắn, dưới giới hạn 4096 ký tự
+            nhom = bao_cao[i:i + 12]
+            if not gui_telegram(cfg, soan_bao_cao(nhom)):
+                return
+            con.executemany("UPDATE bao_cao SET da_gui=1 WHERE link=?", [(r["link"],) for r in nhom])
+            con.commit()
+        log.info("Đã gửi %d báo cáo CTCK", len(bao_cao))
 
 
 def chay_thu():

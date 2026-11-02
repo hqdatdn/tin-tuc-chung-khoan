@@ -67,6 +67,22 @@ table.gia .dv { display: block; font-size: 11px; color: var(--muted); }
 .tang { color: var(--up); }
 .giam { color: var(--down); }
 .ghi-chu { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+/* Mục Định giá CTCK */
+.dg-the { background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--accent);
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; }
+.dg-the h2 { font-size: 14px; margin: 0 0 8px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.bang-cuon { overflow-x: auto; }
+table.dg { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.dg th { font-size: 12px; font-weight: 600; color: var(--muted); text-align: right; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: bottom; }
+table.dg td { text-align: right; padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.dg th.trai, table.dg td.trai { text-align: left; }
+table.dg tr:nth-child(even) td { background: var(--zebra); }
+.kn { font-weight: 700; font-size: 11.5px; padding: 1px 7px; border-radius: 4px; color: #fff; background: var(--star); }
+.kn.tot { background: var(--up); }
+.kn.xau { background: var(--down); }
+.gmt { font-weight: 700; color: var(--accent); }
+.tin details { margin-top: 4px; font-size: 14px; color: var(--muted); }
+.tin details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
 @media (max-width: 900px) { .cuon-gia { max-height: 330px; overflow-y: auto; } }
 @media (max-width: 520px) { table.gia .bo-doi { display: none; } }
 .ma-nong { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -193,6 +209,8 @@ function veTabs(ds) {
   for (const k in DATA.nhom) dem[k] = ds.filter(t => t.nhom === k).length;
   const tabs = [["tat", "Tất cả"]];
   if (UU.size) tabs.push(["uu", "⭐ Ưu tiên"]);
+  tabs.push(["dg", "📊 Định giá CTCK"]);
+  dem.dg = locBaoCao().length;
   for (const k in DATA.nhom) tabs.push([k, DATA.nhom[k]]);
   document.getElementById("tabs").innerHTML = tabs.map(([k, ten]) =>
     `<button class="tab ${st.nhom === k ? "chon" : ""}" data-nhom="${k}">${esc(ten)}<span class="so">${dem[k]}</span></button>`).join("");
@@ -215,7 +233,67 @@ function nhanNgay(d) {
   return lech === 0 ? "Hôm nay · " + s : lech === 1 ? "Hôm qua · " + s : s;
 }
 
+// ---- Mục Định giá CTCK: danh mục khuyến nghị VCBS + báo cáo mới nhất của các CTCK (CafeF tổng hợp) ----
+const DG = DATA.dinh_gia || { vcbs: {}, bao_cao: [] };
+for (const b of DG.bao_cao) b.khoa = boDau([b.ma, b.ctck, b.td, b.tom_tat, b.kn].join(" "));
+let dmVcbs = luuDoc("tt_vcbs", "CPCTC");
+const KN_TOT = /^(MUA|KHẢ QUAN|TÍCH LŨY|OUTPERFORM|BUY|ACCUMULATE)$/, KN_XAU = /^(BÁN|KÉM KHẢ QUAN|UNDERPERFORM|SELL)$/;
+
+function locBaoCao() {
+  const q = boDau(st.q.trim());
+  return DG.bao_cao.filter(b => (!q || b.khoa.includes(q)) && (!st.ma || b.ma === st.ma));
+}
+function oVcbs(k, v) {
+  if (v === null || v === undefined || v === "") return "";
+  if (/^ma(ChungKhoan)?$/.test(k)) return `<button class="chip ${UU.has(v) ? "sao" : ""}" data-ma="${esc(v)}">${esc(v)}</button>`;
+  if (typeof v === "number") return v.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+  return esc(String(v));
+}
+function veDinhGia() {
+  let html = "";
+  const dm = DG.vcbs || {};
+  if (!dm[dmVcbs]) dmVcbs = Object.keys(dm)[0];
+  if (dmVcbs) {
+    const d = dm[dmVcbs];
+    const cot = d.cot.filter(([k]) => d.ds.some(r => r[k] !== null && r[k] !== undefined && r[k] !== ""));
+    const ngay = d.ngay ? new Date(d.ngay).toLocaleDateString("vi-VN") : "";
+    html += `<section class="dg-the"><h2>Danh mục khuyến nghị VCBS</h2>
+      <div class="tab-gia">${Object.entries(dm).map(([k, n]) =>
+        `<button class="${k === dmVcbs ? "chon" : ""}" data-vcbs="${k}">${esc(n.ten)}</button>`).join("")}</div>
+      <div class="bang-cuon"><table class="dg"><thead><tr>${cot.map(([k, ten]) =>
+        `<th class="${/^ma|^ngay/.test(k) || k === "ghiChu" ? "trai" : ""}">${esc(ten)}</th>`).join("")}</tr></thead>
+      <tbody>${d.ds.map(r => `<tr>${cot.map(([k]) =>
+        `<td class="${/^ma|^ngay/.test(k) || k === "ghiChu" ? "trai" : ""}">${oVcbs(k, r[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <div class="ghi-chu">Cập nhật ${ngay} · Giá tính bằng nghìn đồng · Nguồn: Trung tâm phân tích VCBS (vcbs.com.vn)</div></section>`;
+  }
+  const bc = locBaoCao();
+  html += `<section class="dg-the"><h2>Báo cáo mới nhất từ các CTCK (${bc.length})</h2>`;
+  html += bc.length ? bc.slice(0, st.hien).map(b => {
+    const ngay = b.ngay ? new Date(b.ngay).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) : "";
+    const kn = b.kn ? `<span class="kn ${KN_TOT.test(b.kn) ? "tot" : KN_XAU.test(b.kn) ? "xau" : ""}">${esc(b.kn)}</span>` : "";
+    const gmt = b.gmt ? `<span class="gmt">GMT ${b.gmt.toLocaleString("vi-VN")}</span>` : "";
+    return `<article class="tin" style="--mau:var(--accent)">
+      <div class="dong-dau"><span class="gio">${ngay}</span>
+        ${b.ma ? `<button class="chip ${UU.has(b.ma) ? "sao" : ""}" data-ma="${esc(b.ma)}">${esc(b.ma)}</button>` : ""}
+        ${kn}${gmt}<span class="nguon" title="${esc(b.ctck || "")}">${esc(b.ctck_ngan || "")}</span></div>
+      <a class="td" href="${esc(b.link)}" target="_blank" rel="noopener">${esc(b.td)}</a>
+      ${b.tom_tat ? `<details><summary>Tóm tắt</summary>${esc(b.tom_tat)}</details>` : ""}
+    </article>`;
+  }).join("") : `<div class="trong">Không có báo cáo phù hợp.</div>`;
+  if (bc.length > st.hien) html += `<button class="them" id="xemThem">Xem thêm (${bc.length - st.hien} báo cáo)</button>`;
+  html += `<div class="ghi-chu">Nguồn: CafeF tổng hợp báo cáo của các CTCK. Khuyến nghị và giá mục tiêu (GMT) được đọc tự động
+    từ tiêu đề, tóm tắt nên có thể thiếu; xem báo cáo gốc để chắc chắn.</div></section>`;
+  document.getElementById("dsTin").innerHTML = html;
+}
+
 function veTin(ds) {
+  if (st.nhom === "dg") {
+    veDinhGia();
+    const dl = document.getElementById("dangLoc");
+    dl.classList.toggle("hien", !!st.ma);
+    dl.innerHTML = st.ma ? `Đang lọc mã <b>${esc(st.ma)}</b><button id="boLocMa">✕ Bỏ lọc</button>` : "";
+    return;
+  }
   const loc = st.nhom === "tat" ? ds : st.nhom === "uu" ? ds.filter(t => t.uu) : ds.filter(t => t.nhom === st.nhom);
   const hien = loc.slice(0, st.hien);
   let html = "", ngayTruoc = "";
@@ -277,6 +355,8 @@ document.addEventListener("click", e => {
   if (tab) { st.nhom = tab.dataset.nhom; st.hien = TRANG; ve(); return; }
   const chip = e.target.closest(".chip");
   if (chip) { st.ma = st.ma === chip.dataset.ma ? "" : chip.dataset.ma; st.hien = TRANG; ve(); scrollTo({ top: 0 }); return; }
+  const vc = e.target.closest("button[data-vcbs]");
+  if (vc) { dmVcbs = vc.dataset.vcbs; luuGhi("tt_vcbs", dmVcbs); ve(); return; }
   if (e.target.id === "boLocMa") { st.ma = ""; ve(); return; }
   if (e.target.id === "xemThem") { st.hien += TRANG; ve(); }
 });
