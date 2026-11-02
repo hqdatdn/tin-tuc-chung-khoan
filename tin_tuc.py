@@ -105,6 +105,13 @@ TU_KHOA_VN = [
     "lợi nhuận", "doanh thu", "lãi ròng", "kqkd", "kết quả kinh doanh", "niêm yết", "thoái vốn", "sáp nhập",
     "m&a", "ipo", "cổ đông", "đhđcđ", "tăng vốn", "phát hành", "giá điện",
 ]
+# Chuyên mục Doanh nghiệp: chỉ giữ tin không gắn mã khi nói về tài chính doanh nghiệp, thị trường vốn
+# (từ vĩ mô chung như "xuất khẩu" làm lọt tin không liên quan, vd giải thưởng khoa học)
+TU_KHOA_DN = [
+    "cổ phiếu", "cổ tức", "chứng khoán", "trái phiếu", "lợi nhuận", "doanh thu", "lãi ròng", "kqkd",
+    "kết quả kinh doanh", "niêm yết", "thoái vốn", "sáp nhập", "m&a", "ipo", "cổ đông", "đhđcđ", "tăng vốn",
+    "phát hành", "giá điện", "lãi suất", "tỷ giá", "khối ngoại",
+]
 
 # Phân loại theo nội dung tiêu đề (chuyên mục của báo chỉ là gợi ý ban đầu)
 RE_HANG_HOA = re.compile(
@@ -215,7 +222,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         nhom = "vm"   # chuyên mục Doanh nghiệp nhưng không gắn được công ty niêm yết nào: tin kinh tế chung
     if tong_hop or nhom == "hh":
         ma = [m for m in ma if co_ngu_canh_ma(m, noi_dung)]
-    giu = (bool(ma) or any(k in noi_dung.lower() for k in TU_KHOA_VN)) if loc else True
+    tu_khoa = TU_KHOA_DN if nhom_nguon == "dn" else TU_KHOA_VN
+    giu = (bool(ma) or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
     return nhom, ma, giu
 
 
