@@ -771,32 +771,29 @@ def cap_nhat_tpcp(con):
 
 def lay_ls_3_ngan_hang(bang_cafef):
     """Lãi suất tiết kiệm 12 tháng của Vietcombank, Vikki, MB (theo yêu cầu theo dõi 3 ngân hàng này).
-    - Vietcombank: dữ liệu bảng lãi suất trên trang vietcombank.com.vn (tại quầy), kèm giờ cập nhật.
-    - Vikki: bảng "Lãi suất huy động tiết kiệm bằng VND Online" trên vikkibank.vn (nhận lãi cuối kỳ), kèm ngày áp dụng.
+    - Vietcombank: dữ liệu bảng lãi suất trên trang vietcombank.com.vn (tại quầy).
+    - Vikki: bảng "Lãi suất huy động tiết kiệm bằng VND Online" trên vikkibank.vn (nhận lãi cuối kỳ).
     - MB: trang MB chặn đọc tự động (403) nên lấy số MB trong bảng CafeF; đã đối chiếu khớp biểu lãi suất MB
-      hiệu lực 21/10/2026 (12 tháng, dưới 1 tỷ, lãi trả sau 5,70%)."""
+      hiệu lực 21/10/2026 (12 tháng, dưới 1 tỷ, lãi trả sau 5,70%).
+    Mỗi lần chạy đọc lại bảng hiện hành; web chỉ ghi ngày đọc (hôm nay), không ghi ngày áp dụng cũ của biểu lãi suất."""
     kq = {}
     try:
         h = requests.get("https://www.vietcombank.com.vn/vi-VN/KHCN/Cong-cu-Tien-ich/KHCN---Lai-suat", headers=UA, timeout=30).text
         d = json.loads(html.unescape(re.search(r'id="currentDataInterestRate" value="([^"]+)"', h).group(1)))
         x = next(x for x in d["Data"] if x["tenorType"] == "Savings" and x["tenor"] == "12-months" and x["currencyCode"] == "VND")
-        kq["VCB"] = {"ten": "Vietcombank", "t12": round(x["rates"] * 100, 2), "loai": "tại quầy",
-                     "ngay": d["UpdatedDate"][:10], "ghi_chu": "cập nhật " + d["UpdatedDate"][11:16]}
+        kq["VCB"] = {"ten": "Vietcombank", "t12": round(x["rates"] * 100, 2), "loai": "tại quầy"}
     except Exception as e:
         log.warning("Không lấy được lãi suất Vietcombank: %s", str(e)[:80])
     try:
         h = requests.get("https://vikkibank.vn/lai-suat-huy-dong-tiet-kiem-bang-vnd-online/", headers=UA, timeout=30).text
         t = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " | ", h)))
         so = re.findall(r"[\d]+,[\d]+", re.search(r"\|\s*12 tháng\s*\|([^a-zA-Z]{0,120})", t).group(1))
-        ap_dung = re.search(r"kể từ ngày\s*(\d{2})/(\d{2})/(\d{4})", t)
-        kq["VIKKI"] = {"ten": "Vikki", "t12": float(so[-1].replace(",", ".")), "loai": "online, lãi cuối kỳ",
-                       "ngay": f"{ap_dung[3]}-{ap_dung[2]}-{ap_dung[1]}" if ap_dung else None,
-                       "ghi_chu": f"áp dụng từ {ap_dung[1]}/{ap_dung[2]}/{ap_dung[3]}" if ap_dung else ""}
+        kq["VIKKI"] = {"ten": "Vikki", "t12": float(so[-1].replace(",", ".")), "loai": "online, lãi cuối kỳ"}
     except Exception as e:
         log.warning("Không lấy được lãi suất Vikki: %s", str(e)[:80])
     mb = next((b for b in bang_cafef if b["ma"] == "MBB"), None)
     if mb:
-        kq["MB"] = {"ten": "MB", "t12": mb["t12"], "loai": "tại quầy, dưới 1 tỷ", "ngay": None, "ghi_chu": "theo CafeF"}
+        kq["MB"] = {"ten": "MB", "t12": mb["t12"], "loai": "tại quầy, dưới 1 tỷ"}
     return kq
 
 
@@ -841,9 +838,8 @@ def lay_bieu_do(con):
     hom_nay = datetime.now(VN_TZ).date().isoformat()
     for ma, x in ls3.items():
         con.execute("INSERT OR REPLACE INTO chuoi VALUES (?, ?, ?)", (f"LS12_{ma}", hom_nay, x["t12"]))
-        # lãi suất giữ nguyên từ ngày áp dụng: thêm mốc ngày áp dụng để biểu đồ thấy mức này kéo dài từ khi nào
-        if x.get("ngay") and x["ngay"] < hom_nay and x["ngay"] >= (datetime.now(VN_TZ) - timedelta(days=365)).date().isoformat():
-            con.execute("INSERT OR IGNORE INTO chuoi VALUES (?, ?, ?)", (f"LS12_{ma}", x["ngay"], x["t12"]))
+    # chỉ dùng số đọc được trong ngày: bỏ mốc ngày áp dụng cũ đã ghi trước đây (Vikki 02/06/2026)
+    con.execute("DELETE FROM chuoi WHERE ma LIKE 'LS12_%' AND ngay < '2026-11-03'")
     con.commit()
     bd["ls3"] = {ma: {**x, "chuoi": [list(r) for r in con.execute(
         "SELECT ngay, gia FROM chuoi WHERE ma=? ORDER BY ngay", (f"LS12_{ma}",))]} for ma, x in ls3.items()}

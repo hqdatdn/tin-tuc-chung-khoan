@@ -460,8 +460,8 @@ function veBieuDo() {   // dải biểu đồ gọn trên trang chính (tab Tấ
     ${the("bdSjc", "Vàng SJC (tr.đ/lượng)", `<span class="giam">Bán ${so(cuoi(sjc)?.[2], 1)}</span> · <span class="tang">Mua ${so(cuoi(sjc)?.[1], 1)}</span>`, "1 năm · CafeF")}
     ${the("bdVangTg", "Vàng thế giới (USD/oz)", so(cuoi(tg)?.[1], 1), "1 năm · Yahoo Finance")}
     ${the("bdTk", "Tiết kiệm 12 tháng", Object.values(L3).map(x => `${esc(x.ten)} ${so(x.t12)}%`).join(" · "),
-      Object.values(L3).map(x => `${esc(x.ten)}: ${esc(x.loai)}${x.ghi_chu ? ", " + esc(x.ghi_chu) : ""}`).join(" · ") +
-      ` · kiểm tra lúc ${new Date(DATA.cap_nhat).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`)}
+      `Số liệu ngày ${new Date(DATA.cap_nhat).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}, đọc lúc ${new Date(DATA.cap_nhat).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · ` +
+      Object.values(L3).map(x => `${esc(x.ten)}: ${esc(x.loai)}`).join(" · "))}
     ${the("bdTpcp", "TPCP Việt Nam 10 năm", `${so(cuoi(tp)?.[1])}%`, "Par yield · HNX")}
     ${the("bdMy", "Lãi suất Mỹ", `3 tháng ${so(cuoi(BD.my_3t)?.[1])}% · 10 năm ${so(cuoi(BD.my_10n)?.[1])}%`, "Tín phiếu 3 tháng, TP 10 năm · Yahoo")}`;
   veDuong("bdSjc", sjc.map(x => x[0]), [{ ten: "Bán ra", so: sjc.map(x => x[2]), mau: mau("--down") },
