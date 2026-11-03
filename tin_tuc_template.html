@@ -134,6 +134,8 @@ table.dg tr:nth-child(even) td { background: var(--zebra); }
 .nut-bot { display: block; text-align: center; margin-top: 10px; padding: 8px; border-radius: 8px; text-decoration: none;
   font-weight: 600; font-size: 14px; color: #fff; background: #229ed9; }
 .nut-bot:hover { filter: brightness(1.08); }
+/* iPhone tự phóng to (và giữ nguyên) khi chạm vào ô nhập có chữ nhỏ hơn 16px: làm trang trông như bị cắt */
+@media (max-width: 900px) { input, select, textarea { font-size: 16px !important; } }
 /* Tab KQKD quý */
 .tom-tat-so { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; margin: 4px 0 10px; font-variant-numeric: tabular-nums; }
 .tom-tat-so b { font-size: 16px; }
@@ -429,7 +431,8 @@ function veDuong(id, nhan, cacDuong, donVi) {
       borderWidth: 2, pointRadius: nhan.length < 15 ? 3 : 0, tension: 0.15, spanGaps: true })) },
     options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
       plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y?.toLocaleString("vi-VN")} ${donVi}` } } },
+        tooltip: { callbacks: { title: c => ngayVN(c[0]?.label),
+          label: c => `${c.dataset.label}: ${c.parsed.y?.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} ${donVi}` } } },
       scales: { x: { ticks: { color: mau("--muted"), maxTicksLimit: 4, maxRotation: 0, font: { size: 10 },
           callback(v) { const s = this.getLabelForValue(v);   // chuỗi dài: tháng/năm; chuỗi ngắn: ngày/tháng
             if (!s || s.length !== 10) return s;
@@ -438,6 +441,7 @@ function veDuong(id, nhan, cacDuong, donVi) {
         y: { ticks: { color: mau("--muted"), maxTicksLimit: 4, font: { size: 10 } }, grid: { color: mau("--line") } } } }
   }));
 }
+function ngayVN(s) { return s && s.length === 10 ? `${s.slice(8)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : (s || ""); }
 function ghepTheoNgay(...chuoi) {   // gộp nhiều chuỗi [[ngày, giá]] về chung một trục ngày
   const ngay = [...new Set(chuoi.flatMap(c => (c || []).map(x => x[0])))].sort();
   return [ngay, ...chuoi.map(c => { const m = new Map((c || []).map(x => [x[0], x[1]])); return ngay.map(d => m.get(d) ?? null); })];
@@ -455,8 +459,9 @@ function veBieuDo() {   // dải biểu đồ gọn trên trang chính (tab Tấ
   document.getElementById("khuBieuDo").innerHTML = `
     ${the("bdSjc", "Vàng SJC (tr.đ/lượng)", `<span class="giam">Bán ${so(cuoi(sjc)?.[2], 1)}</span> · <span class="tang">Mua ${so(cuoi(sjc)?.[1], 1)}</span>`, "1 năm · CafeF")}
     ${the("bdVangTg", "Vàng thế giới (USD/oz)", so(cuoi(tg)?.[1], 1), "1 năm · Yahoo Finance")}
-    ${the("bdTk", "Lãi suất tiết kiệm 12 tháng", `TB ${so(cuoi(BD.tk12_tb)?.[1])}% · Big4 ${so(cuoi(BD.tk12_big4)?.[1])}%`,
-      (cao ? `Cao nhất ${esc(cao.ten)} ${so(cao.t12)}% · ` : "") + (ngayTk < 10 ? "lưu từ 02/11/2026 · " : "") + "CafeF")}
+    ${the("bdTk", "Tiết kiệm 12 tháng (tại quầy)", `TB ${so(cuoi(BD.tk12_tb)?.[1])}% · Big4 ${so(cuoi(BD.tk12_big4)?.[1])}%`,
+      `Số liệu ngày ${ngayVN(cuoi(BD.tk12_tb)?.[0])}` + (cao ? ` · cao nhất ${esc(cao.ten)} ${so(cao.t12)}%` : "") +
+      ` · lãi suất gửi online thường cao hơn · CafeF${ngayTk < 10 ? " · lưu từ 02/11/2026" : ""}`)}
     ${the("bdTpcp", "TPCP Việt Nam 10 năm", `${so(cuoi(tp)?.[1])}%`, "Par yield · HNX")}
     ${the("bdMy", "Lãi suất Mỹ", `3 tháng ${so(cuoi(BD.my_3t)?.[1])}% · 10 năm ${so(cuoi(BD.my_10n)?.[1])}%`, "Tín phiếu 3 tháng, TP 10 năm · Yahoo")}`;
   veDuong("bdSjc", sjc.map(x => x[0]), [{ ten: "Bán ra", so: sjc.map(x => x[2]), mau: mau("--down") },
