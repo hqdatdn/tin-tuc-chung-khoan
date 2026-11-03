@@ -454,23 +454,19 @@ function veBieuDo() {   // dải biểu đồ gọn trên trang chính (tab Tấ
     <div class="khung-bd-nho"><canvas id="${id}" role="img" aria-label="${tieuDe}"></canvas></div>
     <div class="ghi-chu">${ghiChu}</div></section>`;
   const sjc = BD.vang_sjc || [], tg = BD.vang_tg || [], tp = BD.tpcp10 || [];
-  const L3 = BD.ls3 || {};   // Vietcombank, MB, Vikki
+  const vcb = BD.ls_vcb || { chuoi: [] };   // Vietcombank 12 tháng từ đầu năm
   const ngayTk = (BD.tk12_tb || []).length;
   document.getElementById("khuBieuDo").innerHTML = `
     ${the("bdSjc", "Vàng SJC (tr.đ/lượng)", `<span class="giam">Bán ${so(cuoi(sjc)?.[2], 1)}</span> · <span class="tang">Mua ${so(cuoi(sjc)?.[1], 1)}</span>`, "1 năm · CafeF")}
     ${the("bdVangTg", "Vàng thế giới (USD/oz)", so(cuoi(tg)?.[1], 1), "1 năm · Yahoo Finance")}
-    ${the("bdTk", "Tiết kiệm 12 tháng", Object.values(L3).map(x => `${esc(x.ten)} ${so(x.t12)}%`).join(" · "),
-      `Số liệu ngày ${new Date(DATA.cap_nhat).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}, đọc lúc ${new Date(DATA.cap_nhat).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · ` +
-      Object.values(L3).map(x => `${esc(x.ten)}: ${esc(x.loai)}`).join(" · "))}
+    ${the("bdTk", "Tiết kiệm 12 tháng Vietcombank", `${so(vcb.t12)}%`,
+      `Tại quầy · số liệu ngày ${new Date(DATA.cap_nhat).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })} · từ 01/01 · vietcombank.com.vn`)}
     ${the("bdTpcp", "TPCP Việt Nam 10 năm", `${so(cuoi(tp)?.[1])}%`, "Par yield · HNX")}
     ${the("bdMy", "Lãi suất Mỹ", `3 tháng ${so(cuoi(BD.my_3t)?.[1])}% · 10 năm ${so(cuoi(BD.my_10n)?.[1])}%`, "Tín phiếu 3 tháng, TP 10 năm · Yahoo")}`;
   veDuong("bdSjc", sjc.map(x => x[0]), [{ ten: "Bán ra", so: sjc.map(x => x[2]), mau: mau("--down") },
     { ten: "Mua vào", so: sjc.map(x => x[1]), mau: mau("--up") }], "triệu");
   veDuong("bdVangTg", tg.map(x => x[0]), [{ ten: "Vàng thế giới", so: tg.map(x => x[1]), mau: mau("--star") }], "USD");
-  const MAU_NH = { VCB: mau("--accent"), MB: mau("--c-dn"), VIKKI: mau("--c-vm") };
-  const maNh = Object.keys(L3);
-  const [nTk, ...duongNh] = ghepTheoNgay(...maNh.map(m => L3[m].chuoi));
-  veDuong("bdTk", nTk, maNh.map((m, i) => ({ ten: L3[m].ten, so: duongNh[i], mau: MAU_NH[m] || mau("--star") })), "%");
+  veDuong("bdTk", vcb.chuoi.map(x => x[0]), [{ ten: "Vietcombank 12 tháng", so: vcb.chuoi.map(x => x[1]), mau: mau("--accent") }], "%");
   veDuong("bdTpcp", tp.map(x => x[0]), [{ ten: "TPCP 10 năm", so: tp.map(x => x[1]), mau: mau("--c-dn") }], "%");
   const [nMy, my3, my10] = ghepTheoNgay(BD.my_3t, BD.my_10n);
   veDuong("bdMy", nMy, [{ ten: "Tín phiếu 3 tháng", so: my3, mau: mau("--c-qt") }, { ten: "Trái phiếu 10 năm", so: my10, mau: mau("--c-cg") }], "%");

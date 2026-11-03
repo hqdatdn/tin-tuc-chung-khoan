@@ -20,7 +20,7 @@ import sqlite3
 import sys
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -769,32 +769,18 @@ def cap_nhat_tpcp(con):
     return None
 
 
-def lay_ls_3_ngan_hang(bang_cafef):
-    """Lãi suất tiết kiệm 12 tháng của Vietcombank, Vikki, MB (theo yêu cầu theo dõi 3 ngân hàng này).
-    - Vietcombank: dữ liệu bảng lãi suất trên trang vietcombank.com.vn (tại quầy).
-    - Vikki: bảng "Lãi suất huy động tiết kiệm bằng VND Online" trên vikkibank.vn (nhận lãi cuối kỳ).
-    - MB: trang MB chặn đọc tự động (403) nên lấy số MB trong bảng CafeF; đã đối chiếu khớp biểu lãi suất MB
-      hiệu lực 21/10/2026 (12 tháng, dưới 1 tỷ, lãi trả sau 5,70%).
-    Mỗi lần chạy đọc lại bảng hiện hành; web chỉ ghi ngày đọc (hôm nay), không ghi ngày áp dụng cũ của biểu lãi suất."""
-    kq = {}
-    try:
-        h = requests.get("https://www.vietcombank.com.vn/vi-VN/KHCN/Cong-cu-Tien-ich/KHCN---Lai-suat", headers=UA, timeout=30).text
-        d = json.loads(html.unescape(re.search(r'id="currentDataInterestRate" value="([^"]+)"', h).group(1)))
-        x = next(x for x in d["Data"] if x["tenorType"] == "Savings" and x["tenor"] == "12-months" and x["currencyCode"] == "VND")
-        kq["VCB"] = {"ten": "Vietcombank", "t12": round(x["rates"] * 100, 2), "loai": "tại quầy"}
-    except Exception as e:
-        log.warning("Không lấy được lãi suất Vietcombank: %s", str(e)[:80])
-    try:
-        h = requests.get("https://vikkibank.vn/lai-suat-huy-dong-tiet-kiem-bang-vnd-online/", headers=UA, timeout=30).text
-        t = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " | ", h)))
-        so = re.findall(r"[\d]+,[\d]+", re.search(r"\|\s*12 tháng\s*\|([^a-zA-Z]{0,120})", t).group(1))
-        kq["VIKKI"] = {"ten": "Vikki", "t12": float(so[-1].replace(",", ".")), "loai": "online, lãi cuối kỳ"}
-    except Exception as e:
-        log.warning("Không lấy được lãi suất Vikki: %s", str(e)[:80])
-    mb = next((b for b in bang_cafef if b["ma"] == "MBB"), None)
-    if mb:
-        kq["MB"] = {"ten": "MB", "t12": mb["t12"], "loai": "tại quầy, dưới 1 tỷ"}
-    return kq
+# Các lần Vietcombank đổi lãi suất tiết kiệm 12 tháng (tại quầy) trước khi hệ thống tự đọc hằng ngày.
+# Đối chiếu bản lưu trang lãi suất VCB trên web.archive.org (28/11/2025 4,6%; 18/01–11/03/2026 5,2%;
+# 10/04–09/10/2026 5,9%; 24/10/2026 5,4%) với ngày điều chỉnh báo chí đưa tin (16/12/2025, 24/03/2026, 20/10/2026).
+LS12_VCB_MOC = [("2025-12-16", 5.2), ("2026-03-24", 5.9), ("2026-10-20", 5.4)]
+
+
+def lay_ls_vcb():
+    """Lãi suất tiết kiệm 12 tháng tại quầy của Vietcombank, đọc trên bảng lãi suất vietcombank.com.vn."""
+    h = requests.get("https://www.vietcombank.com.vn/vi-VN/KHCN/Cong-cu-Tien-ich/KHCN---Lai-suat", headers=UA, timeout=30).text
+    d = json.loads(html.unescape(re.search(r'id="currentDataInterestRate" value="([^"]+)"', h).group(1)))
+    x = next(x for x in d["Data"] if x["tenorType"] == "Savings" and x["tenor"] == "12-months" and x["currencyCode"] == "VND")
+    return round(x["rates"] * 100, 2)
 
 
 def lay_bieu_do(con):
@@ -834,15 +820,21 @@ def lay_bieu_do(con):
         bd["tk_bang"] = sorted(bang, key=lambda b: -b["t12"])
     except Exception as e:
         log.warning("Không lấy được lãi suất tiết kiệm: %s", str(e)[:80])
-    ls3 = lay_ls_3_ngan_hang(bd.get("tk_bang") or [])
-    hom_nay = datetime.now(VN_TZ).date().isoformat()
-    for ma, x in ls3.items():
-        con.execute("INSERT OR REPLACE INTO chuoi VALUES (?, ?, ?)", (f"LS12_{ma}", hom_nay, x["t12"]))
-    # chỉ dùng số đọc được trong ngày: bỏ mốc ngày áp dụng cũ đã ghi trước đây (Vikki 02/06/2026)
-    con.execute("DELETE FROM chuoi WHERE ma LIKE 'LS12_%' AND ngay < '2026-11-03'")
-    con.commit()
-    bd["ls3"] = {ma: {**x, "chuoi": [list(r) for r in con.execute(
-        "SELECT ngay, gia FROM chuoi WHERE ma=? ORDER BY ngay", (f"LS12_{ma}",))]} for ma, x in ls3.items()}
+    try:   # Vietcombank 12 tháng từ đầu năm: mốc điều chỉnh đã biết + số đọc mỗi ngày, kéo giá trị qua từng ngày
+        hom_nay = datetime.now(VN_TZ).date()
+        con.execute("INSERT OR REPLACE INTO chuoi VALUES (?, ?, ?)", ("LS12_VCB", hom_nay.isoformat(), lay_ls_vcb()))
+        con.execute("DELETE FROM chuoi WHERE ma LIKE 'LS12_%' AND ma != 'LS12_VCB'")
+        con.commit()
+        moc = sorted(LS12_VCB_MOC + [tuple(r) for r in con.execute("SELECT ngay, gia FROM chuoi WHERE ma='LS12_VCB'")])
+        ngay, chuoi_vcb = date(hom_nay.year, 1, 1), []
+        while ngay <= hom_nay:
+            gia = [g for n, g in moc if n <= ngay.isoformat()]
+            if gia:
+                chuoi_vcb.append([ngay.isoformat(), gia[-1]])
+            ngay += timedelta(days=1)
+        bd["ls_vcb"] = {"t12": chuoi_vcb[-1][1], "chuoi": chuoi_vcb}
+    except Exception as e:
+        log.warning("Không lấy được lãi suất Vietcombank: %s", str(e)[:80])
     bd["tpcp_duong_cong"] = cap_nhat_tpcp(con)
     chuoi = lambda ma: [list(r) for r in con.execute("SELECT ngay, gia FROM chuoi WHERE ma=? ORDER BY ngay", (ma,))]
     bd["tk12_tb"], bd["tk12_big4"], bd["tpcp10"] = chuoi("TK12_TB"), chuoi("TK12_BIG4"), chuoi("TPCP10")
