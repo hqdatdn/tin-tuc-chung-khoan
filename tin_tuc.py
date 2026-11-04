@@ -169,10 +169,11 @@ RE_HINH_SU = re.compile(
     r"án tù|tử hình|chủ hụi|vỡ hụi|hốt hụi", re.I)
 TU_KHOA_TAI_CHINH_TD = TU_KHOA_VN + ["doanh nghiệp", "ngân hàng", "công ty", "tập đoàn", "thao túng", "ubcknn"]
 # Tin thị trường nhà đất (góp ý 04/11: "Đất nền chật vật tìm đầu ra" -> mục Bất động sản riêng).
-# Tin về một doanh nghiệp niêm yết cụ thể (1-2 mã trong tiêu đề) vẫn là tin Doanh nghiệp.
+# Tin về doanh nghiệp (1-2 mã trong tiêu đề, KQKD, cổ phiếu, "đại gia bất động sản", "TTC Land"...) vẫn là tin Doanh nghiệp.
 RE_BDS = re.compile(
     r"bất động sản|bbđsb|đất nền|căn hộ|chung cư|nhà ở xã hội|nhà ở thương mại|giá nhà|giá đất|giá thuê nhà|"
     r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở", re.I)
+RE_BDS_DOANH_NGHIEP = re.compile(r"cổ phiếu|đại gia|\bland\b|tập đoàn|công ty|niêm yết", re.I)
 TU_KHOA_EN = re.compile(
     r"\b(fed|federal reserve|fomc|powell|interest rates?|rate cut|rate hike|inflation|cpi|"
     r"treasur(y|ies)|bond yields?|oil|crude|opec|gold|copper|steel|iron ore|dollar|tariffs?|"
@@ -272,7 +273,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         nhom = "hh"
     elif nhom_nguon != "qt" and not ma_td and not tin_thi_truong and RE_NGANH_HANG.search(tieu_de):
         nhom = "hh"
-    elif nhom_nguon != "qt" and not tin_thi_truong and RE_BDS.search(tieu_de) and not 1 <= len(ma_td) <= 2:
+    elif (nhom_nguon != "qt" and not tin_thi_truong and RE_BDS.search(tieu_de) and not 1 <= len(ma_td) <= 2
+          and not RE_SU_KIEN_DN.search(tieu_de) and not RE_BDS_DOANH_NGHIEP.search(tieu_de)):
         nhom = "bds"
     elif nhom_nguon == "vm" and not tong_hop:
         ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)]
