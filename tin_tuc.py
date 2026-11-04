@@ -143,8 +143,10 @@ RE_HANG_HOA_DICH = re.compile(
 # Tin trái phiếu, cổ phiếu, Fed... chỉ nhắc giá dầu/vàng ("Treasuries fall amid oil volatility") vẫn là Quốc tế:
 # khi tiêu đề có các từ này, hàng hóa phải đứng ở đầu tiêu đề mới tính là tin Hàng hóa
 RE_TAI_CHINH_NGOAI = re.compile(
-    r"\b(treasur(y|ies)|yields?|bonds?|stocks?|equit(y|ies)|s&p|nasdaq|dow|wall street|fed)\b|"
-    r"kho bạc|trái phiếu|lợi suất|cổ phiếu|chứng khoán|phố wall", re.I)
+    r"\b(treasur(y|ies)|yields?|bonds?|stocks?|equit(y|ies)|s&p|nasdaq|dow|wall street|fed|dollar|currenc(y|ies)|"
+    r"forex|rupee|yen|euro|yuan|sensex|nikkei|earnings)\b|"
+    r"kho bạc|trái phiếu|lợi suất|cổ phiếu|chứng khoán|phố wall|đô la|đồng usd|tiền tệ|tỷ giá|rupee|đồng yên|"
+    r"nhân dân tệ|sensex|nikkei|thu nhập|lợi nhuận", re.I)
 
 
 def la_hang_hoa_ngoai(tieu_de, da_dich):
