@@ -138,8 +138,20 @@ RE_HANG_HOA_EN = re.compile(
     r"commodit(y|ies)|opec\+?|natural gas|lng|wheat|corn|soybeans?|coffee|sugar|cocoa|bullion|precious metals?)\b", re.I)
 # Tin báo ngoại đã dịch (tiêu đề lưu bằng tiếng Việt): nhận Hàng hóa theo bản dịch
 RE_HANG_HOA_DICH = re.compile(
-    r"\b(vàng|bạc|giá dầu|dầu thô|dầu mỏ|dầu brent|kim loại quý|bạch kim|quặng sắt|khí đốt|lng|lúa mì|"
+    r"\b(vàng|(?<!kho )bạc|giá dầu|dầu thô|dầu mỏ|dầu brent|kim loại quý|bạch kim|quặng sắt|khí đốt|lng|lúa mì|"
     r"đậu tương|ca cao|hàng hóa|opec\+?)\b", re.I)
+# Tin trái phiếu, cổ phiếu, Fed... chỉ nhắc giá dầu/vàng ("Treasuries fall amid oil volatility") vẫn là Quốc tế:
+# khi tiêu đề có các từ này, hàng hóa phải đứng ở đầu tiêu đề mới tính là tin Hàng hóa
+RE_TAI_CHINH_NGOAI = re.compile(
+    r"\b(treasur(y|ies)|yields?|bonds?|stocks?|equit(y|ies)|s&p|nasdaq|dow|wall street|fed)\b|"
+    r"kho bạc|trái phiếu|lợi suất|cổ phiếu|chứng khoán|phố wall", re.I)
+
+
+def la_hang_hoa_ngoai(tieu_de, da_dich):
+    m = RE_HANG_HOA_EN.search(tieu_de) or (da_dich and RE_HANG_HOA_DICH.search(tieu_de))
+    return bool(m) and (m.start() < 12 or not RE_TAI_CHINH_NGOAI.search(tieu_de))
+
+
 # Bài bảng giá, lãi suất hằng ngày: nhắc tên nhiều ngân hàng, tiệm vàng nhưng không phải tin doanh nghiệp
 RE_TONG_HOP = re.compile(r"^(giá|lãi suất|tỷ giá|biểu lãi suất)\b.*(ngày|hôm nay|sáng|chiều|\d{1,2}/\d{1,2})", re.I)
 RE_NGU_CANH_MA = r"(?i:\(|mã\s+|cổ phiếu\s+|cp\s+|hose:\s*|hsx:\s*){m}(?![{chu}])"
@@ -262,7 +274,7 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
       (tránh gắn PNJ vì "giá vàng tại PNJ", gắn 7 ngân hàng vì bảng lãi suất)."""
     noi_dung = f"{tieu_de} {tom_tat}"
     if not tieng_viet:
-        nhom = "hh" if RE_HANG_HOA_EN.search(tieu_de) else nhom_nguon
+        nhom = "hh" if la_hang_hoa_ngoai(tieu_de, False) else nhom_nguon
         return nhom, [], (nhom == "hh" or bool(TU_KHOA_EN.search(noi_dung))) if loc else True
     ma = tim_ma(noi_dung, tat_ca_ma, ten_goi) if nhom_nguon != "qt" else []
     tong_hop = bool(RE_TONG_HOP.search(tieu_de))
@@ -443,9 +455,9 @@ def phan_loai_lai(con, tat_ca_ma, ten_goi):
             # tin lấy trước khi bật lọc cho chuyên mục Chứng khoán, Doanh nghiệp ghi loc=0
             loc, tieng_viet = bool(r["loc"]) or nhom_goc in ("ck", "dn"), bool(r["tieng_viet"])
             if not tieng_viet:   # tin báo ngoại: đã dịch nên không áp lại bộ lọc từ khóa tiếng Anh, chỉ nhận Hàng hóa
-                dich_hh = RE_HANG_HOA_EN.search(r["tieu_de"]) or (r["dich"] == 1 and RE_HANG_HOA_DICH.search(r["tieu_de"]))
-                if dich_hh and r["nhom"] != "hh":
-                    con.execute("UPDATE tin SET nhom='hh' WHERE id=?", (r["id"],))
+                nhom = "hh" if la_hang_hoa_ngoai(r["tieu_de"], r["dich"] == 1) else nhom_goc
+                if nhom != r["nhom"]:
+                    con.execute("UPDATE tin SET nhom=?, nhom_nguon=? WHERE id=?", (nhom, nhom_goc, r["id"]))
                     doi += 1
                 continue
         nhom, ma, giu = phan_loai(r["tieu_de"], r["tom_tat"] or "", nhom_goc, loc, tieng_viet, tat_ca_ma, ten_goi)
