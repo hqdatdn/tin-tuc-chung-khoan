@@ -11,7 +11,7 @@
   --bg: #f2f6f4; --card: #ffffff; --text: #1b1f24; --muted: #667080; --line: #dfe7e3;
   --accent: #00704a; --accent-soft: #e2f2e9; --new: #d1242f; --chip: #edf3f0; --chip-text: #23342c;
   --star: #b7791f; --star-soft: #fff6e0;
-  --c-dn: #1f6feb; --c-ck: #1a7f37; --c-cg: #8250df; --c-vm: #bf5700; --c-hh: #9a6700; --c-qt: #0a7ea4;
+  --c-dn: #1f6feb; --c-ck: #1a7f37; --c-cg: #8250df; --c-vm: #bf5700; --c-bds: #b3366b; --c-hh: #9a6700; --c-qt: #0a7ea4;
   --up: #1a7f37; --down: #cf222e; --zebra: #f6f8fa;
 }
 @media (prefers-color-scheme: dark) {
@@ -20,7 +20,7 @@
     --bg: #0e1412; --card: #16201c; --text: #e6ece9; --muted: #98a8a0; --line: #26332d;
     --accent: #3fbf7f; --accent-soft: #12301f; --new: #ff7b72; --chip: #1f2b26; --chip-text: #d2ddd7;
     --star: #e3b341; --star-soft: #2e2511;
-    --c-dn: #58a6ff; --c-ck: #3fb950; --c-cg: #bc8cff; --c-vm: #f0883e; --c-hh: #d29922; --c-qt: #39c5cf;
+    --c-dn: #58a6ff; --c-ck: #3fb950; --c-cg: #bc8cff; --c-vm: #f0883e; --c-bds: #f778ba; --c-hh: #d29922; --c-qt: #39c5cf;
     --up: #3fb950; --down: #ff7b72; --zebra: #1c2129;
   }
 }
@@ -194,7 +194,7 @@ table.dg td.duong { color: var(--up); }
 </div>
 <script>
 const DATA = /*DU_LIEU*/null;
-const MAU = { dn: "var(--c-dn)", ck: "var(--c-ck)", cg: "var(--c-cg)", vm: "var(--c-vm)", hh: "var(--c-hh)", qt: "var(--c-qt)" };
+const MAU = { dn: "var(--c-dn)", ck: "var(--c-ck)", cg: "var(--c-cg)", vm: "var(--c-vm)", bds: "var(--c-bds)", hh: "var(--c-hh)", qt: "var(--c-qt)" };
 const TEN_NGAN = { dn: "Doanh nghiệp", ck: "Thị trường CK", cg: "Chuyên gia", vm: "Vĩ mô", hh: "Hàng hóa", qt: "Quốc tế" };
 // Danh mục của người xem: lưu trong trình duyệt (localStorage), mỗi người một danh mục, không cần đăng nhập.
 // UU = mã được đánh dấu ⭐ = danh mục người xem + mã ưu tiên trong config.ini
@@ -261,7 +261,7 @@ function veTabs(ds) {
   const tabs = [["tat", "Tất cả"]];
   tabs.push(["uu", "⭐ Danh mục của tôi"]);
   dem.uu = UU.size ? locDanhMuc(ds).length : "";
-  for (const k of ["ck", "dn", "vm", "cg", "dg", "kq", "hh", "qt", "cb"])
+  for (const k of ["ck", "dn", "vm", "bds", "cg", "dg", "kq", "hh", "qt", "cb"])
     tabs.push([k, RIENG[k] || DATA.nhom[k]]);
   document.getElementById("tabs").innerHTML = tabs.map(([k, ten]) =>
     `<button class="tab ${st.nhom === k ? "chon" : ""}" data-nhom="${k}">${esc(ten)}<span class="so">${dem[k]}</span></button>`).join("");

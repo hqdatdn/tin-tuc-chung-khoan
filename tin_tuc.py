@@ -94,6 +94,7 @@ TEN_NHOM = {
     "ck": "📈 Thị trường chứng khoán",
     "cg": "🗣 Nhận định - chuyên gia",
     "vm": "🏦 Vĩ mô - Tiền tệ",
+    "bds": "🏘 Bất động sản",
     "hh": "🛢 Hàng hóa",
     "qt": "🌍 Quốc tế",
 }
@@ -126,6 +127,19 @@ TU_KHOA_CK = [
 RE_HANG_HOA = re.compile(
     r"giá (vàng|bạc|dầu|xăng|thép|tôn|cà phê|cao su|gạo|lúa|hồ tiêu|tiêu|heo|lợn|phân bón|than|quặng|đường|điều|"
     r"sầu riêng|nông sản)|vàng (miếng|nhẫn|sjc)|^vàng (thế giới |trong nước )?(rơi|lao|tăng|giảm|bật|lập)", re.I)
+# Tin ngành hàng nông sản, nguyên liệu (không chỉ tin giá) cũng là Hàng hóa (góp ý 04/11: "Mở đường đưa trà Việt
+# thoát 'bẫy' xuất thô"), trừ khi tiêu đề nói về doanh nghiệp niêm yết cụ thể
+RE_NGANH_HANG = re.compile(
+    r"\b(trà|chè|cà phê|gạo|lúa gạo|hồ tiêu|hạt tiêu|hạt điều|cao su|sầu riêng|nông sản|thủy sản|cá tra|tôm|"
+    r"thép|phân bón|dầu thô|xăng dầu|quặng|đường mía|ca cao)\b", re.I)
+# Tin nước ngoài về vàng, dầu, kim loại... là Hàng hóa, không phải Quốc tế (góp ý 04/11: tin Kitco về vàng, bạc)
+RE_HANG_HOA_EN = re.compile(
+    r"\b(gold|silver|oil|crude|brent|wti|copper|platinum|palladium|iron ore|steel|aluminium|aluminum|"
+    r"commodit(y|ies)|opec\+?|natural gas|lng|wheat|corn|soybeans?|coffee|sugar|cocoa|bullion|precious metals?)\b", re.I)
+# Tin báo ngoại đã dịch (tiêu đề lưu bằng tiếng Việt): nhận Hàng hóa theo bản dịch
+RE_HANG_HOA_DICH = re.compile(
+    r"\b(vàng|bạc|giá dầu|dầu thô|dầu mỏ|dầu brent|kim loại quý|bạch kim|quặng sắt|khí đốt|lng|lúa mì|"
+    r"đậu tương|ca cao|hàng hóa|opec\+?)\b", re.I)
 # Bài bảng giá, lãi suất hằng ngày: nhắc tên nhiều ngân hàng, tiệm vàng nhưng không phải tin doanh nghiệp
 RE_TONG_HOP = re.compile(r"^(giá|lãi suất|tỷ giá|biểu lãi suất)\b.*(ngày|hôm nay|sáng|chiều|\d{1,2}/\d{1,2})", re.I)
 RE_NGU_CANH_MA = r"(?i:\(|mã\s+|cổ phiếu\s+|cp\s+|hose:\s*|hsx:\s*){m}(?![{chu}])"
@@ -140,6 +154,25 @@ RE_SU_KIEN_DN = re.compile(
 RE_THI_TRUONG = re.compile(
     r"vn-?index|vn30|hnx-?index|upcom|thị trường|khối ngoại|thanh khoản|phiên|dòng tiền|nhóm cổ phiếu|"
     r"nhóm ngành|chỉ số|margin|công ty chứng khoán|ctck|ngành|ubcknn|ủy ban chứng khoán|chứng khoán", re.I)
+# Tiêu đề chỉ nói về một sự kiện riêng của doanh nghiệp (nhân sự, cổ tức...), không nói về cả thị trường:
+# tin Doanh nghiệp dù tên công ty có chữ "Chứng khoán" (góp ý 04/11: "Chứng khoán Thành Công bổ nhiệm Phó TGĐ")
+RE_SU_KIEN_RIENG = re.compile(
+    r"bổ nhiệm|miễn nhiệm|từ nhiệm|tổng giám đốc|chủ tịch|hđqt|hội đồng quản trị|cổ tức|đhđcđ|đại hội cổ đông|"
+    r"tăng vốn|người nội bộ|chốt quyền", re.I)
+RE_THI_TRUONG_CHUNG = re.compile(
+    r"vn-?index|vn30|hnx-?index|upcom|thị trường|khối ngoại|thanh khoản|phiên|dòng tiền|nhóm cổ phiếu|"
+    r"nhóm ngành|chỉ số|margin|ngành|ubcknn|ủy ban chứng khoán|nhiều (công ty|doanh nghiệp)", re.I)
+# Vụ án hình sự của cá nhân (lừa đảo, chủ hụi...) không liên quan tài chính - doanh nghiệp: bỏ (góp ý 04/11).
+# Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
+RE_HINH_SU = re.compile(
+    r"khởi tố|bắt tạm giam|tạm giam|bị bắt|lừa đảo|chiếm đoạt|truy nã|truy tố|cáo trạng|xét xử|tuyên án|hầu tòa|"
+    r"án tù|tử hình|chủ hụi|vỡ hụi|hốt hụi", re.I)
+TU_KHOA_TAI_CHINH_TD = TU_KHOA_VN + ["doanh nghiệp", "ngân hàng", "công ty", "tập đoàn", "thao túng", "ubcknn"]
+# Tin thị trường nhà đất (góp ý 04/11: "Đất nền chật vật tìm đầu ra" -> mục Bất động sản riêng).
+# Tin về một doanh nghiệp niêm yết cụ thể (1-2 mã trong tiêu đề) vẫn là tin Doanh nghiệp.
+RE_BDS = re.compile(
+    r"bất động sản|bbđsb|đất nền|căn hộ|chung cư|nhà ở xã hội|nhà ở thương mại|giá nhà|giá đất|giá thuê nhà|"
+    r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở", re.I)
 TU_KHOA_EN = re.compile(
     r"\b(fed|federal reserve|fomc|powell|interest rates?|rate cut|rate hike|inflation|cpi|"
     r"treasur(y|ies)|bond yields?|oil|crude|opec|gold|copper|steel|iron ore|dollar|tariffs?|"
@@ -228,27 +261,38 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
       (tránh gắn PNJ vì "giá vàng tại PNJ", gắn 7 ngân hàng vì bảng lãi suất)."""
     noi_dung = f"{tieu_de} {tom_tat}"
     if not tieng_viet:
-        return nhom_nguon, [], bool(TU_KHOA_EN.search(noi_dung)) if loc else True
+        nhom = "hh" if RE_HANG_HOA_EN.search(tieu_de) else nhom_nguon
+        return nhom, [], (nhom == "hh" or bool(TU_KHOA_EN.search(noi_dung))) if loc else True
     ma = tim_ma(noi_dung, tat_ca_ma, ten_goi) if nhom_nguon != "qt" else []
     tong_hop = bool(RE_TONG_HOP.search(tieu_de))
     nhom = nhom_nguon
+    ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)] if nhom_nguon != "qt" else []
+    tin_thi_truong = nhom_nguon == "ck" and (RE_THI_TRUONG_CHUNG.search(tieu_de) or "cổ phiếu" in tieu_de.lower())
     if nhom_nguon != "qt" and RE_HANG_HOA.search(tieu_de):
         nhom = "hh"
+    elif nhom_nguon != "qt" and not ma_td and not tin_thi_truong and RE_NGANH_HANG.search(tieu_de):
+        nhom = "hh"
+    elif nhom_nguon != "qt" and not tin_thi_truong and RE_BDS.search(tieu_de) and not 1 <= len(ma_td) <= 2:
+        nhom = "bds"
     elif nhom_nguon == "vm" and not tong_hop:
         ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)]
         if 1 <= len(ma_td) <= 2:
             nhom = "dn"
     elif nhom_nguon == "dn" and not ma:
         nhom = "vm"   # chuyên mục Doanh nghiệp nhưng không gắn được công ty niêm yết nào: tin kinh tế chung
-    elif nhom_nguon == "ck" and not RE_THI_TRUONG.search(tieu_de) and (
-            RE_SU_KIEN_DN.search(noi_dung) or 1 <= len(ma) <= 2):
+    elif nhom_nguon == "ck" and (
+            (not RE_THI_TRUONG.search(tieu_de) and (RE_SU_KIEN_DN.search(noi_dung) or 1 <= len(ma) <= 2))
+            or (RE_SU_KIEN_RIENG.search(tieu_de) and not RE_THI_TRUONG_CHUNG.search(tieu_de))):
         # tin về một doanh nghiệp cụ thể: "Doanh nghiệp có nữ Tổng giám đốc... phát thông báo quan trọng",
         # "Taseco Land (TAL) khánh thành...", "Tỷ phú Phạm Nhật Vượng huy động 20.000 người..." (VIC qua VinFast)
         nhom = "dn"
     if tong_hop or nhom == "hh":
         ma = [m for m in ma if co_ngu_canh_ma(m, noi_dung)]
     tu_khoa = {"dn": TU_KHOA_DN, "ck": TU_KHOA_CK}.get(nhom_nguon, TU_KHOA_VN)
-    giu = (bool(ma) or nhom in ("dn", "hh") or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
+    giu = (bool(ma) or nhom in ("dn", "hh", "bds") or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
+    if (RE_HINH_SU.search(tieu_de) and not ma
+            and not any(k in tieu_de.lower() for k in TU_KHOA_TAI_CHINH_TD)):
+        giu = False   # vụ án của cá nhân, không liên quan tài chính
     if any(k in tieu_de.lower() for k in doc_tu_khoa_loai()):
         giu = False   # người dùng đã góp ý là tin không liên quan
     return nhom, ma, giu
@@ -396,7 +440,11 @@ def phan_loai_lai(con, tat_ca_ma, ten_goi):
         else:
             # tin lấy trước khi bật lọc cho chuyên mục Chứng khoán, Doanh nghiệp ghi loc=0
             loc, tieng_viet = bool(r["loc"]) or nhom_goc in ("ck", "dn"), bool(r["tieng_viet"])
-            if not tieng_viet:   # tin báo ngoại: đã dịch nên không áp lại bộ lọc từ khóa tiếng Anh
+            if not tieng_viet:   # tin báo ngoại: đã dịch nên không áp lại bộ lọc từ khóa tiếng Anh, chỉ nhận Hàng hóa
+                dich_hh = RE_HANG_HOA_EN.search(r["tieu_de"]) or (r["dich"] == 1 and RE_HANG_HOA_DICH.search(r["tieu_de"]))
+                if dich_hh and r["nhom"] != "hh":
+                    con.execute("UPDATE tin SET nhom='hh' WHERE id=?", (r["id"],))
+                    doi += 1
                 continue
         nhom, ma, giu = phan_loai(r["tieu_de"], r["tom_tat"] or "", nhom_goc, loc, tieng_viet, tat_ca_ma, ten_goi)
         ma = ",".join(ma)
@@ -1082,7 +1130,7 @@ def soan_tin(rows, uu_tien, nhom_gui):
     gio = datetime.now(VN_TZ).strftime("%H:%M %d/%m")
     tong = sum(len(v) for v in nhom.values())
     dong = [f"<b>📰 Tin mới {gio} — {tong} tin</b>"]
-    thu_tu = ["uu", "ck", "dn", "vm", "cg", "hh", "qt"]   # cùng thứ tự với các tab trên trang web
+    thu_tu = ["uu", "ck", "dn", "vm", "bds", "cg", "hh", "qt"]   # cùng thứ tự với các tab trên trang web
     for k in thu_tu:
         if k not in nhom:
             continue
