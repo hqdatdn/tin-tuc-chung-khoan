@@ -176,6 +176,14 @@ RE_SU_KIEN_RIENG = re.compile(
 RE_THI_TRUONG_CHUNG = re.compile(
     r"vn-?index|vn30|hnx-?index|upcom|thị trường|khối ngoại|thanh khoản|phiên|dòng tiền|nhóm cổ phiếu|"
     r"nhóm ngành|chỉ số|margin|ngành|ubcknn|ủy ban chứng khoán|nhiều (công ty|doanh nghiệp)", re.I)
+# Tin Vĩ mô nói về sự kiện riêng của doanh nghiệp (kể cả mã sàn HNX/UPCoM không có trong ma_hose.csv) là Doanh nghiệp
+# (góp ý 10/11: "Giáo sư giàu nhất Việt Nam đối đầu với các quỹ ngoại thâu tóm ngược doanh nghiệp" - Vicostone)
+RE_DN_TRONG_VI_MO = re.compile(
+    r"cổ tức|đhđcđ|đại hội cổ đông|hđqt|hội đồng quản trị|chốt (danh sách|quyền)|thâu tóm|người kiểm soát|"
+    r"thoái vốn|tổng giám đốc|gom .{0,20}cổ phiếu|cổ phiếu từng|cổ đông (ngoại|lớn)|quỹ ngoại", re.I)
+RE_VI_MO_CHUNG = re.compile(
+    r"ngân hàng nhà nước|nhnn|lãi suất|tỷ giá|gdp|cpi|lạm phát|ngân sách|đầu tư công|chính phủ|thủ tướng|"
+    r"bộ tài chính|quốc hội|nghị định|chủ tịch nước|tổng bí thư", re.I)
 # Vụ án hình sự của cá nhân (lừa đảo, chủ hụi, cựu giám đốc chi nhánh bị xử vắng mặt...) không liên quan
 # tài chính - doanh nghiệp: bỏ (góp ý 04/11, 10/11).
 # Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
@@ -293,8 +301,7 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
           and not RE_SU_KIEN_DN.search(tieu_de) and not RE_BDS_DOANH_NGHIEP.search(tieu_de)):
         nhom = "bds"
     elif nhom_nguon == "vm" and not tong_hop:
-        ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)]
-        if 1 <= len(ma_td) <= 2:
+        if 1 <= len(ma_td) <= 2 or (RE_DN_TRONG_VI_MO.search(tieu_de) and not RE_VI_MO_CHUNG.search(tieu_de)):
             nhom = "dn"
     elif nhom_nguon == "dn" and not ma:
         nhom = "vm"   # chuyên mục Doanh nghiệp nhưng không gắn được công ty niêm yết nào: tin kinh tế chung
