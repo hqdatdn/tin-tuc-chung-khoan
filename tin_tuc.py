@@ -303,7 +303,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
     elif nhom_nguon == "vm" and not tong_hop:
         if 1 <= len(ma_td) <= 2 or (RE_DN_TRONG_VI_MO.search(tieu_de) and not RE_VI_MO_CHUNG.search(tieu_de)):
             nhom = "dn"
-    elif nhom_nguon == "dn" and not ma:
+    elif nhom_nguon == "dn" and not ma and not (
+            RE_DN_TRONG_VI_MO.search(tieu_de) and not RE_VI_MO_CHUNG.search(tieu_de)):
         nhom = "vm"   # chuyên mục Doanh nghiệp nhưng không gắn được công ty niêm yết nào: tin kinh tế chung
     elif nhom_nguon == "ck" and (
             (not RE_THI_TRUONG.search(tieu_de) and (RE_SU_KIEN_DN.search(noi_dung) or 1 <= len(ma) <= 2))
