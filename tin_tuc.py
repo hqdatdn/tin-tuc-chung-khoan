@@ -176,11 +176,13 @@ RE_SU_KIEN_RIENG = re.compile(
 RE_THI_TRUONG_CHUNG = re.compile(
     r"vn-?index|vn30|hnx-?index|upcom|thị trường|khối ngoại|thanh khoản|phiên|dòng tiền|nhóm cổ phiếu|"
     r"nhóm ngành|chỉ số|margin|ngành|ubcknn|ủy ban chứng khoán|nhiều (công ty|doanh nghiệp)", re.I)
-# Vụ án hình sự của cá nhân (lừa đảo, chủ hụi...) không liên quan tài chính - doanh nghiệp: bỏ (góp ý 04/11).
+# Vụ án hình sự của cá nhân (lừa đảo, chủ hụi, cựu giám đốc chi nhánh bị xử vắng mặt...) không liên quan
+# tài chính - doanh nghiệp: bỏ (góp ý 04/11, 10/11).
 # Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
 RE_HINH_SU = re.compile(
     r"khởi tố|bắt tạm giam|tạm giam|bị bắt|lừa đảo|chiếm đoạt|truy nã|truy tố|cáo trạng|xét xử|tuyên án|hầu tòa|"
-    r"án tù|tử hình|chủ hụi|vỡ hụi|hốt hụi", re.I)
+    r"án tù|tử hình|chủ hụi|vỡ hụi|hốt hụi|xử vắng mặt|bị xử|bị cáo|phiên tòa|phiên xử|tòa tuyên|kêu oan|"
+    r"đơn đề nghị làm rõ", re.I)
 TU_KHOA_TAI_CHINH_TD = TU_KHOA_VN + ["doanh nghiệp", "ngân hàng", "công ty", "tập đoàn", "thao túng", "ubcknn"]
 # Tin thị trường nhà đất (góp ý 04/11: "Đất nền chật vật tìm đầu ra" -> mục Bất động sản riêng).
 # Tin về doanh nghiệp (1-2 mã trong tiêu đề, KQKD, cổ phiếu, "đại gia bất động sản", "TTC Land"...) vẫn là tin Doanh nghiệp.
