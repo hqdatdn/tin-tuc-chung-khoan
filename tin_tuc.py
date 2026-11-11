@@ -202,7 +202,8 @@ TU_KHOA_TAI_CHINH_TD = TU_KHOA_VN + ["doanh nghiệp", "ngân hàng", "công ty"
 RE_BDS = re.compile(
     r"bất động sản|bbđsb|đất nền|căn hộ|chung cư|nhà ở xã hội|nhà ở thương mại|giá nhà|giá đất|giá thuê nhà|"
     r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở|"
-    r"đấu giá (quyền sử dụng )?đất|khu đất|tiền sử dụng đất", re.I)
+    r"đấu giá (quyền sử dụng )?đất|khu đất|tiền sử dụng đất|khu dân cư|quỹ đất|giao đất|cho thuê đất|"
+    r"[\d.,]+\s?(m2|m²|ha) đất", re.I)
 # Tin nói về cả thị trường cổ phiếu, từ bất kỳ nguồn nào ("VN-Index bật tăng, nhóm bất động sản khởi sắc" - Bnews)
 RE_CHI_SO = re.compile(r"vn-?index|vn30|hnx-?index|khối ngoại|nhóm cổ phiếu", re.I)
 RE_BDS_DOANH_NGHIEP = re.compile(r"cổ phiếu|đại gia|\bland\b|tập đoàn|công ty|niêm yết|khoản nợ", re.I)
