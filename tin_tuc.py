@@ -203,7 +203,9 @@ RE_BDS = re.compile(
     r"bất động sản|bbđsb|đất nền|căn hộ|chung cư|nhà ở xã hội|nhà ở thương mại|giá nhà|giá đất|giá thuê nhà|"
     r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở|"
     r"đấu giá (quyền sử dụng )?đất|khu đất|tiền sử dụng đất", re.I)
-RE_BDS_DOANH_NGHIEP = re.compile(r"cổ phiếu|đại gia|\bland\b|tập đoàn|công ty|niêm yết", re.I)
+# Tin nói về cả thị trường cổ phiếu, từ bất kỳ nguồn nào ("VN-Index bật tăng, nhóm bất động sản khởi sắc" - Bnews)
+RE_CHI_SO = re.compile(r"vn-?index|vn30|hnx-?index|khối ngoại|nhóm cổ phiếu", re.I)
+RE_BDS_DOANH_NGHIEP = re.compile(r"cổ phiếu|đại gia|\bland\b|tập đoàn|công ty|niêm yết|khoản nợ", re.I)
 TU_KHOA_EN = re.compile(
     r"\b(fed|federal reserve|fomc|powell|interest rates?|rate cut|rate hike|inflation|cpi|"
     r"treasur(y|ies)|bond yields?|oil|crude|opec|gold|copper|steel|iron ore|dollar|tariffs?|"
@@ -298,9 +300,12 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
     tong_hop = bool(RE_TONG_HOP.search(tieu_de))
     nhom = nhom_nguon
     ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)] if nhom_nguon != "qt" else []
-    tin_thi_truong = nhom_nguon == "ck" and (RE_THI_TRUONG_CHUNG.search(tieu_de) or "cổ phiếu" in tieu_de.lower())
+    tin_thi_truong = bool(RE_CHI_SO.search(tieu_de)) or (
+        nhom_nguon == "ck" and (RE_THI_TRUONG_CHUNG.search(tieu_de) or "cổ phiếu" in tieu_de.lower()))
     if nhom_nguon != "qt" and RE_HANG_HOA.search(tieu_de):
         nhom = "hh"
+    elif nhom_nguon in ("vm", "dn") and RE_CHI_SO.search(tieu_de) and not 1 <= len(ma_td) <= 2:
+        nhom = "ck"   # tin chỉ số, khối ngoại từ nguồn kinh tế chung
     elif nhom_nguon != "qt" and not ma_td and not tin_thi_truong and RE_NGANH_HANG.search(tieu_de):
         nhom = "hh"
     elif (nhom_nguon != "qt" and not tin_thi_truong and RE_BDS.search(tieu_de) and not 1 <= len(ma_td) <= 2
