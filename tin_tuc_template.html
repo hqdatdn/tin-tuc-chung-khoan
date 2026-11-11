@@ -195,7 +195,7 @@ table.dg td.duong { color: var(--up); }
 <script>
 const DATA = /*DU_LIEU*/null;
 const MAU = { dn: "var(--c-dn)", ck: "var(--c-ck)", cg: "var(--c-cg)", vm: "var(--c-vm)", bds: "var(--c-bds)", hh: "var(--c-hh)", qt: "var(--c-qt)" };
-const TEN_NGAN = { dn: "Doanh nghiệp", ck: "Thị trường CK", cg: "Chuyên gia", vm: "Vĩ mô", hh: "Hàng hóa", qt: "Quốc tế" };
+const TEN_NGAN = { dn: "Doanh nghiệp", ck: "Thị trường CK", cg: "Chuyên gia", vm: "Vĩ mô", bds: "Bất động sản", hh: "Hàng hóa", qt: "Quốc tế" };
 // Danh mục của người xem: lưu trong trình duyệt (localStorage), mỗi người một danh mục, không cần đăng nhập.
 // UU = mã được đánh dấu ⭐ = danh mục người xem + mã ưu tiên trong config.ini
 function docDanhMuc() { try { return JSON.parse(localStorage.getItem("tt_danh_muc") || "[]"); } catch (e) { return []; } }

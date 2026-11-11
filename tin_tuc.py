@@ -184,6 +184,11 @@ RE_DN_TRONG_VI_MO = re.compile(
 RE_VI_MO_CHUNG = re.compile(
     r"ngân hàng nhà nước|nhnn|lãi suất|tỷ giá|gdp|cpi|lạm phát|ngân sách|đầu tư công|chính phủ|thủ tướng|"
     r"bộ tài chính|quốc hội|nghị định|chủ tịch nước|tổng bí thư", re.I)
+# Tin nhân sự, lương thưởng, văn hóa doanh nghiệp không gắn mã: không liên quan đầu tư, bỏ
+# (góp ý 11/11: "'Vua tiêu' Phan Minh Thông: Phúc Sinh sẵn sàng trả một nhân sự 21 tháng lương/năm" - lọt vì có chữ "lãi suất")
+RE_NHAN_SU_PHUC_LOI = re.compile(
+    r"tháng lương|thưởng tết|lương thưởng|văn hoá doanh nghiệp|văn hóa doanh nghiệp|phúc lợi|tuyển dụng|"
+    r"thu hút nhân tài|giữ chân nhân", re.I)
 # Vụ án hình sự của cá nhân (lừa đảo, chủ hụi, cựu giám đốc chi nhánh bị xử vắng mặt...) không liên quan
 # tài chính - doanh nghiệp: bỏ (góp ý 04/11, 10/11).
 # Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
@@ -196,7 +201,8 @@ TU_KHOA_TAI_CHINH_TD = TU_KHOA_VN + ["doanh nghiệp", "ngân hàng", "công ty"
 # Tin về doanh nghiệp (1-2 mã trong tiêu đề, KQKD, cổ phiếu, "đại gia bất động sản", "TTC Land"...) vẫn là tin Doanh nghiệp.
 RE_BDS = re.compile(
     r"bất động sản|bbđsb|đất nền|căn hộ|chung cư|nhà ở xã hội|nhà ở thương mại|giá nhà|giá đất|giá thuê nhà|"
-    r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở", re.I)
+    r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở|"
+    r"đấu giá (quyền sử dụng )?đất|khu đất|tiền sử dụng đất", re.I)
 RE_BDS_DOANH_NGHIEP = re.compile(r"cổ phiếu|đại gia|\bland\b|tập đoàn|công ty|niêm yết", re.I)
 TU_KHOA_EN = re.compile(
     r"\b(fed|federal reserve|fomc|powell|interest rates?|rate cut|rate hike|inflation|cpi|"
@@ -316,6 +322,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         ma = [m for m in ma if co_ngu_canh_ma(m, noi_dung)]
     tu_khoa = {"dn": TU_KHOA_DN, "ck": TU_KHOA_CK}.get(nhom_nguon, TU_KHOA_VN)
     giu = (bool(ma) or nhom in ("dn", "hh", "bds") or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
+    if RE_NHAN_SU_PHUC_LOI.search(tieu_de) and not ma:
+        giu = False   # tin nhân sự, lương thưởng của doanh nghiệp không niêm yết
     if (RE_HINH_SU.search(tieu_de) and not ma
             and not any(k in tieu_de.lower() for k in TU_KHOA_TAI_CHINH_TD)):
         giu = False   # vụ án của cá nhân, không liên quan tài chính
