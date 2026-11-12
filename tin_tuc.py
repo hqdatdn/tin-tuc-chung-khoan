@@ -304,7 +304,7 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
     tong_hop = bool(RE_TONG_HOP.search(tieu_de))
     nhom = nhom_nguon
     ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)] if nhom_nguon != "qt" else []
-    # "thị trường bất động sản/nhà ở" không phải tin thị trường chứng khoán (góp ý 13/11)
+    # "thị trường bất động sản/nhà ở" không phải tin thị trường chứng khoán (góp ý 12/11)
     td_ck = RE_THI_TRUONG_NHA_DAT.sub("", tieu_de)
     tin_thi_truong = bool(RE_CHI_SO.search(tieu_de)) or (
         nhom_nguon == "ck" and (RE_THI_TRUONG_CHUNG.search(td_ck) or "cổ phiếu" in td_ck.lower()))
