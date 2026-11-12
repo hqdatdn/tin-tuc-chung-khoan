@@ -207,6 +207,7 @@ RE_BDS = re.compile(
     r"mua nhà|thị trường nhà|nhà ở|"
     r"[\d.,]+\s?(m2|m²|ha) đất", re.I)
 # Tin nói về cả thị trường cổ phiếu, từ bất kỳ nguồn nào ("VN-Index bật tăng, nhóm bất động sản khởi sắc" - Bnews)
+RE_THI_TRUONG_NHA_DAT = re.compile(r"thị trường (bất động sản|bđs|nhà ở|nhà đất|nhà|căn hộ|đất nền)", re.I)
 RE_CHI_SO = re.compile(r"vn-?index|vn30|hnx-?index|khối ngoại|nhóm cổ phiếu", re.I)
 RE_BDS_DOANH_NGHIEP = re.compile(r"cổ phiếu|đại gia|\bland\b|tập đoàn|công ty|niêm yết|khoản nợ", re.I)
 TU_KHOA_EN = re.compile(
@@ -303,8 +304,10 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
     tong_hop = bool(RE_TONG_HOP.search(tieu_de))
     nhom = nhom_nguon
     ma_td = [m for m in ma if m in tim_ma(tieu_de, tat_ca_ma, ten_goi)] if nhom_nguon != "qt" else []
+    # "thị trường bất động sản/nhà ở" không phải tin thị trường chứng khoán (góp ý 13/11)
+    td_ck = RE_THI_TRUONG_NHA_DAT.sub("", tieu_de)
     tin_thi_truong = bool(RE_CHI_SO.search(tieu_de)) or (
-        nhom_nguon == "ck" and (RE_THI_TRUONG_CHUNG.search(tieu_de) or "cổ phiếu" in tieu_de.lower()))
+        nhom_nguon == "ck" and (RE_THI_TRUONG_CHUNG.search(td_ck) or "cổ phiếu" in td_ck.lower()))
     if nhom_nguon != "qt" and RE_HANG_HOA.search(tieu_de):
         nhom = "hh"
     elif nhom_nguon in ("vm", "dn") and RE_CHI_SO.search(tieu_de) and not 1 <= len(ma_td) <= 2:
