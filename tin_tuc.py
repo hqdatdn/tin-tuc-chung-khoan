@@ -196,6 +196,11 @@ RE_GIOI_THIEU_DN = re.compile(
 RE_DN_CO_GIA_TRI_DAU_TU = re.compile(
     r"cổ tức|cổ phiếu|niêm yết|lãi ròng|báo lãi|báo lỗ|lợi nhuận|thua lỗ|phá sản|vỡ nợ|trái phiếu|thoái vốn|sáp nhập|"
     r"m&a|ipo", re.I)
+# Tin giải trí, sự kiện tài trợ, marketing (concert, triển lãm, fan...) không liên quan đầu tư, kể cả khi gắn mã ngân hàng
+# tài trợ (góp ý 12/11: "Dư âm hai đêm concert... triển lãm kỷ niệm 20 năm BigBang" - VPBank)
+RE_GIAI_TRI = re.compile(
+    r"concert|liveshow|live show|triển lãm|\bfan\b|người hâm mộ|ca sĩ|idol|k-?pop|showbiz|hoa hậu|nghệ sĩ|"
+    r"lễ hội|đại nhạc hội|giải chạy|marathon|giải golf|bóng đá|cầu thủ|phim|diễn viên|rapper", re.I)
 # Vụ án hình sự của cá nhân (lừa đảo, chủ hụi, cựu giám đốc chi nhánh bị xử vắng mặt...) không liên quan
 # tài chính - doanh nghiệp: bỏ (góp ý 04/11, 10/11).
 # Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
@@ -341,6 +346,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         ma = [m for m in ma if co_ngu_canh_ma(m, noi_dung)]
     tu_khoa = {"dn": TU_KHOA_DN, "ck": TU_KHOA_CK}.get(nhom_nguon, TU_KHOA_VN)
     giu = (bool(ma) or nhom in ("dn", "hh", "bds") or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
+    if RE_GIAI_TRI.search(tieu_de) and not RE_DN_CO_GIA_TRI_DAU_TU.search(tieu_de):
+        giu = False   # tin giải trí, sự kiện tài trợ
     if RE_GIOI_THIEU_DN.search(tieu_de) and not ma and not RE_DN_CO_GIA_TRI_DAU_TU.search(tieu_de):
         giu = False   # bài giới thiệu doanh nghiệp không niêm yết
     if RE_NHAN_SU_PHUC_LOI.search(tieu_de) and not ma:
