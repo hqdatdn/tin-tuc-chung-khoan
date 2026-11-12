@@ -198,11 +198,13 @@ RE_HINH_SU = re.compile(
     r"đơn đề nghị làm rõ", re.I)
 TU_KHOA_TAI_CHINH_TD = TU_KHOA_VN + ["doanh nghiệp", "ngân hàng", "công ty", "tập đoàn", "thao túng", "ubcknn"]
 # Tin thị trường nhà đất (góp ý 04/11: "Đất nền chật vật tìm đầu ra" -> mục Bất động sản riêng).
+# Tiêu đề chung chung ("Mức giá phù hợp quyết định sức mua nhà") thì nhận theo sapo: từ 2 cụm nhà đất khác nhau trở lên.
 # Tin về doanh nghiệp (1-2 mã trong tiêu đề, KQKD, cổ phiếu, "đại gia bất động sản", "TTC Land"...) vẫn là tin Doanh nghiệp.
 RE_BDS = re.compile(
     r"bất động sản|bbđsb|đất nền|căn hộ|chung cư|nhà ở xã hội|nhà ở thương mại|giá nhà|giá đất|giá thuê nhà|"
     r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở|"
     r"đấu giá (quyền sử dụng )?đất|khu đất|tiền sử dụng đất|khu dân cư|quỹ đất|giao đất|cho thuê đất|"
+    r"mua nhà|thị trường nhà|nhà ở|"
     r"[\d.,]+\s?(m2|m²|ha) đất", re.I)
 # Tin nói về cả thị trường cổ phiếu, từ bất kỳ nguồn nào ("VN-Index bật tăng, nhóm bất động sản khởi sắc" - Bnews)
 RE_CHI_SO = re.compile(r"vn-?index|vn30|hnx-?index|khối ngoại|nhóm cổ phiếu", re.I)
@@ -309,7 +311,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         nhom = "ck"   # tin chỉ số, khối ngoại từ nguồn kinh tế chung
     elif nhom_nguon != "qt" and not ma_td and not tin_thi_truong and RE_NGANH_HANG.search(tieu_de):
         nhom = "hh"
-    elif (nhom_nguon != "qt" and not tin_thi_truong and RE_BDS.search(tieu_de) and not 1 <= len(ma_td) <= 2
+    elif (nhom_nguon != "qt" and not tin_thi_truong and not 1 <= len(ma_td) <= 2
+          and (RE_BDS.search(tieu_de) or (not ma and len({m.group(0).lower() for m in RE_BDS.finditer(tom_tat)}) >= 2))
           and not RE_SU_KIEN_DN.search(tieu_de) and not RE_BDS_DOANH_NGHIEP.search(tieu_de)):
         nhom = "bds"
     elif nhom_nguon == "vm" and not tong_hop:
