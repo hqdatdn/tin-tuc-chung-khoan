@@ -2,3 +2,6 @@
 # Mỗi dòng một cụm từ, không phân biệt hoa thường. Thêm dòng mới khi gặp tin không liên quan.
 # 02/11/2026: tin về Mr Pips (vụ lừa đảo, không liên quan thị trường)
 mr pips
+# 13/11/2026: tin thị trường văn phòng cho thuê (báo cáo Savills, CBRE...) - người dùng góp ý không liên quan
+văn phòng cho thuê
+thị trường văn phòng
