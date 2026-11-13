@@ -216,7 +216,8 @@ RE_BDS = re.compile(
     r"bất động sản|bbđsb|đất nền|căn hộ|chung cư|nhà ở xã hội|nhà ở thương mại|giá nhà|giá đất|giá thuê nhà|"
     r"phân lô|bán nền|condotel|biệt thự|nhà phố|shophouse|nhà đất|horea|sốt đất|khu đô thị|dự án nhà ở|"
     r"đấu giá (quyền sử dụng )?đất|khu đất|tiền sử dụng đất|khu dân cư|quỹ đất|giao đất|cho thuê đất|"
-    r"mua nhà|thị trường nhà|nhà ở|"
+    r"mua nhà|thị trường nhà|nhà ở|phòng trọ|nhà trọ|cho thuê nhà|cho thuê phòng|nhà cho thuê|căn hộ dịch vụ|"
+    r"homestay|ký túc xá|"
     r"[\d.,]+\s?(m2|m²|ha) đất", re.I)
 # Tin nói về cả thị trường cổ phiếu, từ bất kỳ nguồn nào ("VN-Index bật tăng, nhóm bất động sản khởi sắc" - Bnews)
 RE_THI_TRUONG_NHA_DAT = re.compile(r"thị trường (bất động sản|bđs|nhà ở|nhà đất|nhà|căn hộ|đất nền)", re.I)
@@ -328,7 +329,9 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         nhom = "hh"
     elif (nhom_nguon != "qt" and not tin_thi_truong and not 1 <= len(ma_td) <= 2
           and (RE_BDS.search(tieu_de) or (not ma and len({m.group(0).lower() for m in RE_BDS.finditer(tom_tat)}) >= 2))
-          and not RE_SU_KIEN_DN.search(tieu_de) and not RE_BDS_DOANH_NGHIEP.search(tieu_de)):
+          # "doanh thu" của hộ cho thuê phòng trọ không phải dấu hiệu tin doanh nghiệp (góp ý 13/11)
+          and not RE_SU_KIEN_DN.search(re.sub(r"doanh thu", "", tieu_de, flags=re.I))
+          and not RE_BDS_DOANH_NGHIEP.search(tieu_de)):
         nhom = "bds"
     elif nhom_nguon == "vm" and not tong_hop:
         if 1 <= len(ma_td) <= 2 or (RE_DN_TRONG_VI_MO.search(tieu_de) and not RE_VI_MO_CHUNG.search(tieu_de)):
