@@ -34,6 +34,7 @@ CONFIG = THU_MUC / "config.ini"
 FILE_BI_MAT = THU_MUC / "bi_mat.ini"
 DB = THU_MUC / "tin_tuc.db"
 FILE_MA = THU_MUC / "ma_hose.csv"
+FILE_MA_HNX = THU_MUC / "ma_hnx.csv"   # mã sàn HNX: chỉ để gắn mã cho tin, bảng KQKD vẫn chỉ quét HOSE
 FILE_TEN = THU_MUC / "ten_goi_khac.csv"
 FILE_TU_KHOA_LOAI = THU_MUC / "tu_khoa_loai.txt"
 FILE_TEMPLATE = THU_MUC / "tin_tuc_template.html"
@@ -107,6 +108,13 @@ TU_KHOA_VN = [
     "lợi nhuận", "doanh thu", "lãi ròng", "kqkd", "kết quả kinh doanh", "niêm yết", "thoái vốn", "sáp nhập",
     "m&a", "ipo", "cổ đông", "đhđcđ", "tăng vốn", "phát hành", "giá điện",
 ]
+# Dự án năng lượng, hợp đồng lớn: giữ ở cả chuyên mục Vĩ mô và Doanh nghiệp
+# (góp ý 13/11: tin PTSC ký hợp đồng Nhiệt điện Long Phú 1 ở mục Doanh nghiệp CafeF bị lọc mất)
+TU_KHOA_DU_AN = [
+    "nhiệt điện", "điện khí", "điện gió", "điện mặt trời", "nhà máy điện", "điện hạt nhân", "giá phát điện", "lng",
+    "gói thầu", "hợp đồng bot", "quyền thu phí", "siêu cảng",
+]
+TU_KHOA_VN += TU_KHOA_DU_AN
 # Chuyên mục Doanh nghiệp: chỉ giữ tin không gắn mã khi nói về tài chính doanh nghiệp, thị trường vốn
 # (từ vĩ mô chung như "xuất khẩu" làm lọt tin không liên quan, vd giải thưởng khoa học)
 TU_KHOA_DN = [
@@ -114,6 +122,7 @@ TU_KHOA_DN = [
     "kết quả kinh doanh", "niêm yết", "thoái vốn", "sáp nhập", "m&a", "ipo", "cổ đông", "đhđcđ", "tăng vốn",
     "phát hành", "giá điện", "lãi suất", "tỷ giá", "khối ngoại",
 ]
+TU_KHOA_DN += TU_KHOA_DU_AN
 
 # Chuyên mục Chứng khoán: chỉ giữ tin không gắn mã khi nói về thị trường vốn
 # (lọc tin quy hoạch đô thị, vụ hack tiền điện tử, siêu xe... mà báo đăng ở mục chứng khoán)
@@ -200,7 +209,7 @@ RE_DN_CO_GIA_TRI_DAU_TU = re.compile(
 # tài trợ (góp ý 12/11: "Dư âm hai đêm concert... triển lãm kỷ niệm 20 năm BigBang" - VPBank)
 RE_GIAI_TRI = re.compile(
     r"concert|liveshow|live show|triển lãm|\bfan\b|người hâm mộ|ca sĩ|idol|k-?pop|showbiz|hoa hậu|nghệ sĩ|"
-    r"lễ hội|đại nhạc hội|giải chạy|marathon|giải golf|bóng đá|cầu thủ|phim|diễn viên|rapper", re.I)
+    r"lễ hội|đại nhạc hội|âm nhạc|khán giả|giải chạy|marathon|giải golf|bóng đá|cầu thủ|phim|diễn viên|rapper", re.I)
 # Vụ án hình sự của cá nhân (lừa đảo, chủ hụi, cựu giám đốc chi nhánh bị xử vắng mặt...) không liên quan
 # tài chính - doanh nghiệp: bỏ (góp ý 04/11, 10/11).
 # Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
@@ -266,12 +275,34 @@ def doc_ma():
         return {r["ma"].strip().upper() for r in csv.DictReader(f)}
 
 
+_ma_hnx = None
+
+
+def doc_ma_hnx():
+    """{mã: được nhận khi đứng một mình không}. Mã HNX trùng từ thông dụng (CEO, API, NET, MST...) chỉ nhận khi có
+    ngữ cảnh "mã X", "cổ phiếu X", "(X)"; mã quen thuộc (PVS, SHS, IDC...) nhận như mã HOSE."""
+    global _ma_hnx
+    if _ma_hnx is None:
+        _ma_hnx = {}
+        if FILE_MA_HNX.exists():
+            with open(FILE_MA_HNX, encoding="utf-8") as f:
+                _ma_hnx = {r["ma"].strip().upper(): r["tu_do"].strip() == "1" for r in csv.DictReader(f)}
+    return _ma_hnx
+
+
+def doc_ma_gan():
+    """Mã dùng để gắn vào tin, nhận lệnh theo dõi của bot: HOSE + HNX (góp ý 13/11: tin PTSC/PVS bị lọc mất)."""
+    return doc_ma() | set(doc_ma_hnx())
+
+
 def doc_ten_goi():
     """Tên công ty hay xuất hiện trong bài báo -> mã, đọc từ ten_goi_khac.csv (bạn tự thêm được)."""
     if not FILE_TEN.exists():
         return []
     with open(FILE_TEN, encoding="utf-8") as f:
-        return [(re.compile(rf"(?<![{CHU}]){re.escape(r['ten'].strip())}(?![{CHU}])", re.I),
+        # dòng bắt đầu bằng "re:" là biểu thức chính quy (vd "MB" là MBB nhưng "Chứng khoán MB" là MBS)
+        return [(re.compile(r["ten"].strip()[3:] if r["ten"].strip().startswith("re:")
+                            else rf"(?<![{CHU}]){re.escape(r['ten'].strip())}(?![{CHU}])", re.I),
                  r["ma"].strip().upper()) for r in csv.DictReader(f) if r["ten"].strip()]
 
 
@@ -292,7 +323,7 @@ def tim_ma(text, tat_ca_ma, ten_goi):
     for m in RE_MA.findall(text):
         if m not in tat_ca_ma or m in ma:
             continue
-        if m in MA_DE_NHAM and not co_ngu_canh_ma(m, text):
+        if (m in MA_DE_NHAM or doc_ma_hnx().get(m) is False) and not co_ngu_canh_ma(m, text):
             continue
         ma.append(m)
     return ma
@@ -1389,22 +1420,23 @@ def gui_thong_bao_danh_muc(con, cfg):
 
 
 def chay(cfg):
-    tat_ca_ma = doc_ma()
+    tat_ca_ma = doc_ma()          # HOSE: bảng KQKD, công bố thông tin
+    ma_gan = doc_ma_gan()         # HOSE + HNX: gắn mã cho tin, lệnh theo dõi của bot
     con = mo_db()
     con.row_factory = sqlite3.Row
     lan_dau = con.execute("SELECT COUNT(*) FROM tin").fetchone()[0] == 0
     try:
-        xu_ly_lenh_bot(con, cfg, tat_ca_ma)   # trả lời lệnh của người xem cả trong giờ yên lặng
+        xu_ly_lenh_bot(con, cfg, ma_gan)   # trả lời lệnh của người xem cả trong giờ yên lặng
     except Exception:
         log.exception("Lỗi xử lý lệnh bot")
-    tin = thu_thap(tat_ca_ma)
+    tin = thu_thap(ma_gan)
     moi = luu(con, tin)
     log.info("Đọc %d tin, %d tin mới", len(tin), moi)
     con.execute("DELETE FROM tin WHERE thoi_gian < ?",
                 ((datetime.now(timezone.utc) - timedelta(days=XOA_SAU_NGAY)).isoformat(),))
     con.commit()
     dich_tin_nuoc_ngoai(con)
-    phan_loai_lai(con, tat_ca_ma, doc_ten_goi())
+    phan_loai_lai(con, ma_gan, doc_ten_goi())
     lay_bao_cao_ctck(con)
     lay_cong_bo(con)
     cap_nhat_kqkd(con, tat_ca_ma)
@@ -1469,7 +1501,7 @@ def chay(cfg):
 
 
 def chay_thu():
-    tin = thu_thap(doc_ma())
+    tin = thu_thap(doc_ma_gan())
     giu = [t for t in tin if t["giu"]]
     print(f"Đọc {len(tin)} tin, giữ {len(giu)} tin\n")
     for k, ten in TEN_NHOM.items():

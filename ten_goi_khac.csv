@@ -89,3 +89,16 @@ PV Power,POW
 REE,REE
 TTC Land,SCR
 Nguyễn Hồ Nam,BCG
+PTSC,PVS
+Dịch vụ Kỹ thuật Dầu khí,PVS
+Tôn Đông Á,GDA
+Vicostone,VCS
+Chứng khoán MB,MBS
+re:(?<!chứng khoán )(?<![A-Za-z0-9À-ỹ])MB(?![A-Za-z0-9À-ỹ]),MBB
+IDICO,IDC
+Bảo hiểm PVI,PVI
+NCB,NVB
+Bac A Bank,BAB
+Ngân hàng Bắc Á,BAB
+Nhựa Tiền Phong,NTP
+Thaiholdings,THD
