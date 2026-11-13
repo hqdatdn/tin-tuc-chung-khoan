@@ -523,10 +523,10 @@ def luu(con, tin):
 
 def phan_loai_lai(con, tat_ca_ma, ten_goi):
     """Áp luật phân loại hiện hành cho tin trong NGAY_HTML ngày gần nhất (trang HTML hiện đúng ngay khi đổi luật).
-    Chỉ có thể bỏ tin (giu 1 -> 0), không bật lại tin đã bỏ."""
+    Tin đã bỏ cũng được xét lại: luật mới giữ thì hiện lại trên web (tin bỏ đã đánh dấu da_gui=1 nên không gửi lại Telegram)."""
     han = (datetime.now(timezone.utc) - timedelta(days=NGAY_HTML)).isoformat()
     doi = 0
-    for r in con.execute("SELECT * FROM tin WHERE giu=1 AND thoi_gian>=?", (han,)).fetchall():
+    for r in con.execute("SELECT * FROM tin WHERE thoi_gian>=?", (han,)).fetchall():
         nhom_goc = r["nhom_nguon"] or r["nhom"]
         if r["tieng_viet"] is None:
             if r["nhom"] == "qt":   # tin cũ chưa ghi nguồn: không biết là báo Việt hay báo ngoại
@@ -537,6 +537,8 @@ def phan_loai_lai(con, tat_ca_ma, ten_goi):
             # tin lấy trước khi bật lọc cho chuyên mục Chứng khoán, Doanh nghiệp ghi loc=0
             loc, tieng_viet = bool(r["loc"]) or nhom_goc in ("ck", "dn"), bool(r["tieng_viet"])
             if not tieng_viet:   # tin báo ngoại: đã dịch nên không áp lại bộ lọc từ khóa tiếng Anh, chỉ nhận Hàng hóa
+                if not r["giu"]:
+                    continue
                 nhom = "hh" if la_hang_hoa_ngoai(r["tieu_de"], r["dich"] == 1) else nhom_goc
                 if nhom != r["nhom"]:
                     con.execute("UPDATE tin SET nhom=?, nhom_nguon=? WHERE id=?", (nhom, nhom_goc, r["id"]))
@@ -544,7 +546,7 @@ def phan_loai_lai(con, tat_ca_ma, ten_goi):
                 continue
         nhom, ma, giu = phan_loai(r["tieu_de"], r["tom_tat"] or "", nhom_goc, loc, tieng_viet, tat_ca_ma, ten_goi)
         ma = ",".join(ma)
-        if (nhom, ma, int(giu)) != (r["nhom"], r["ma"], 1):
+        if (nhom, ma, int(giu)) != (r["nhom"], r["ma"], r["giu"]):
             con.execute("UPDATE tin SET nhom=?, ma=?, giu=?, nhom_nguon=? WHERE id=?",
                         (nhom, ma, int(giu), nhom_goc, r["id"]))
             doi += 1
