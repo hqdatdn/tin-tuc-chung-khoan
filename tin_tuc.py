@@ -210,6 +210,9 @@ RE_DN_CO_GIA_TRI_DAU_TU = re.compile(
 RE_GIAI_TRI = re.compile(
     r"concert|liveshow|live show|triển lãm|\bfan\b|người hâm mộ|ca sĩ|idol|k-?pop|showbiz|hoa hậu|nghệ sĩ|"
     r"lễ hội|đại nhạc hội|âm nhạc|khán giả|giải chạy|marathon|giải golf|bóng đá|cầu thủ|phim|diễn viên|rapper", re.I)
+# Tin học đường, giáo dục (góp ý 16/11: "Quán quân Olympia có bố mẹ làm tại FPT..." - gắn mã FPT nhưng không liên quan)
+RE_HOC_DUONG = re.compile(
+    r"olympia|học sinh|sinh viên|nam sinh|nữ sinh|thủ khoa|du học|học bổng|tuyển sinh|thần đồng", re.I)
 # Vụ án hình sự của cá nhân (lừa đảo, chủ hụi, cựu giám đốc chi nhánh bị xử vắng mặt...) không liên quan
 # tài chính - doanh nghiệp: bỏ (góp ý 04/11, 10/11).
 # Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
@@ -380,6 +383,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         ma = [m for m in ma if co_ngu_canh_ma(m, noi_dung)]
     tu_khoa = {"dn": TU_KHOA_DN, "ck": TU_KHOA_CK}.get(nhom_nguon, TU_KHOA_VN)
     giu = (bool(ma) or nhom in ("dn", "hh", "bds") or any(k in noi_dung.lower() for k in tu_khoa)) if loc else True
+    if RE_HOC_DUONG.search(tieu_de) and not RE_DN_CO_GIA_TRI_DAU_TU.search(tieu_de):
+        giu = False   # tin học đường, giáo dục
     if RE_GIAI_TRI.search(tieu_de) and not RE_DN_CO_GIA_TRI_DAU_TU.search(tieu_de):
         giu = False   # tin giải trí, sự kiện tài trợ
     if RE_GIOI_THIEU_DN.search(tieu_de) and not ma and not RE_DN_CO_GIA_TRI_DAU_TU.search(tieu_de):
