@@ -215,7 +215,7 @@ RE_HOC_DUONG = re.compile(
     r"olympia|học sinh|sinh viên|nam sinh|nữ sinh|thủ khoa|du học|học bổng|tuyển sinh|thần đồng", re.I)
 # Tin khen thưởng, tri ân, báo chí (góp ý 17/11: "Ngành Chứng khoán tri ân báo chí, 2 phóng viên... được khen thưởng")
 RE_KHEN_THUONG = re.compile(
-    r"tri ân|khen thưởng|bằng khen|huân chương|kỷ niệm chương|phóng viên|nhà báo|báo chí", re.I)
+    r"tri ân|khen thưởng|nhận giải|giải thưởng|bằng khen|huân chương|kỷ niệm chương|phóng viên|nhà báo|báo chí", re.I)
 # Vụ án hình sự của cá nhân (lừa đảo, chủ hụi, cựu giám đốc chi nhánh bị xử vắng mặt...) không liên quan
 # tài chính - doanh nghiệp: bỏ (góp ý 04/11, 10/11).
 # Vẫn giữ khi tiêu đề nhắc doanh nghiệp, ngân hàng, chứng khoán... (vd "Ông Nguyễn Hữu Chỉnh bị bắt, doanh nghiệp báo lãi")
@@ -469,7 +469,7 @@ def thu_thap(tat_ca_ma):
             if thoi_gian is None or thoi_gian < gioi_han:
                 continue
             tom_tat = lam_sach(e.get("summary"))[:400]
-            tieng_viet = ".vn/" in url or "hl=vi" in url
+            tieng_viet = la_bao_viet(url)
             nhom_tin, ma, giu = phan_loai(tieu_de, tom_tat, nhom, loc, tieng_viet, tat_ca_ma, ten_goi)
             tin.append({
                 "id": hashlib.sha1(link.encode()).hexdigest(),
@@ -531,6 +531,11 @@ def luu(con, tin):
     return moi
 
 
+def la_bao_viet(url):
+    """Báo Việt: tên miền .vn, Google News tiếng Việt, hoặc báo Việt dùng tên miền quốc tế (VnExpress)."""
+    return ".vn/" in url or "hl=vi" in url or "vnexpress.net" in url
+
+
 def phan_loai_lai(con, tat_ca_ma, ten_goi):
     """Áp luật phân loại hiện hành cho tin trong NGAY_HTML ngày gần nhất (trang HTML hiện đúng ngay khi đổi luật).
     Tin đã bỏ cũng được xét lại: luật mới giữ thì hiện lại trên web (tin bỏ đã đánh dấu da_gui=1 nên không gửi lại Telegram)."""
@@ -546,6 +551,10 @@ def phan_loai_lai(con, tat_ca_ma, ten_goi):
         else:
             # tin lấy trước khi bật lọc cho chuyên mục Chứng khoán, Doanh nghiệp ghi loc=0
             loc, tieng_viet = bool(r["loc"]) or nhom_goc in ("ck", "dn"), bool(r["tieng_viet"])
+            if not tieng_viet and "vnexpress.net" in (r["link"] or ""):
+                # VnExpress trước 17/11 bị nhận nhầm là báo ngoại (tên miền .net) nên bỏ qua bộ lọc tiếng Việt
+                tieng_viet = True
+                con.execute("UPDATE tin SET tieng_viet=1 WHERE id=?", (r["id"],))
             if not tieng_viet:   # tin báo ngoại: đã dịch nên không áp lại bộ lọc từ khóa tiếng Anh, chỉ nhận Hàng hóa
                 if not r["giu"]:
                     continue
