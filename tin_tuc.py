@@ -394,8 +394,8 @@ def phan_loai(tieu_de, tom_tat, nhom_nguon, loc, tieng_viet, tat_ca_ma, ten_goi)
         giu = False   # tin khen thưởng, tri ân, báo chí
     if RE_GIOI_THIEU_DN.search(tieu_de) and not ma and not RE_DN_CO_GIA_TRI_DAU_TU.search(tieu_de):
         giu = False   # bài giới thiệu doanh nghiệp không niêm yết
-    if RE_NHAN_SU_PHUC_LOI.search(tieu_de) and not ma:
-        giu = False   # tin nhân sự, lương thưởng của doanh nghiệp không niêm yết
+    if RE_NHAN_SU_PHUC_LOI.search(tieu_de) and not RE_DN_CO_GIA_TRI_DAU_TU.search(tieu_de):
+        giu = False   # tin nhân sự, tuyển dụng, lương thưởng (kể cả gắn mã - góp ý 17/11 "Vietnam Airlines tuyển dụng")
     if (RE_HINH_SU.search(tieu_de) and not ma
             and not any(k in tieu_de.lower() for k in TU_KHOA_TAI_CHINH_TD)):
         giu = False   # vụ án của cá nhân, không liên quan tài chính
