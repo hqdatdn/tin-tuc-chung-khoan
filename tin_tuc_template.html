@@ -10,7 +10,7 @@
   --brand: #00704a; --brand-dark: #004d33; --brand-lime: #8dc63f;
   --bg: #f2f6f4; --card: #ffffff; --text: #1b1f24; --muted: #667080; --line: #dfe7e3;
   --accent: #00704a; --accent-soft: #e2f2e9; --new: #d1242f; --chip: #edf3f0; --chip-text: #23342c;
-  --star: #b7791f; --star-soft: #fff6e0;
+  --star: #b7791f; --star-soft: #fff6e0; --ma: #0b4f9c; --ma-text: #ffffff;
   --c-dn: #1f6feb; --c-ck: #1a7f37; --c-cg: #8250df; --c-vm: #bf5700; --c-bds: #b3366b; --c-hh: #9a6700; --c-qt: #0a7ea4;
   --up: #1a7f37; --down: #cf222e; --zebra: #f6f8fa;
 }
@@ -19,7 +19,7 @@
     --brand: #0b5a3c; --brand-dark: #063524; --brand-lime: #9fd45a;
     --bg: #0e1412; --card: #16201c; --text: #e6ece9; --muted: #98a8a0; --line: #26332d;
     --accent: #3fbf7f; --accent-soft: #12301f; --new: #ff7b72; --chip: #1f2b26; --chip-text: #d2ddd7;
-    --star: #e3b341; --star-soft: #2e2511;
+    --star: #e3b341; --star-soft: #2e2511; --ma: #388bfd; --ma-text: #0d1117;
     --c-dn: #58a6ff; --c-ck: #3fb950; --c-cg: #bc8cff; --c-vm: #f0883e; --c-bds: #f778ba; --c-hh: #d29922; --c-qt: #39c5cf;
     --up: #3fb950; --down: #ff7b72; --zebra: #1c2129;
   }
@@ -102,6 +102,10 @@ table.dg tr:nth-child(even) td { background: var(--zebra); }
   font: 600 12px/1.6 ui-monospace, Consolas, monospace; }
 .chip:hover { background: var(--accent-soft); color: var(--accent); }
 .chip.sao { background: var(--star); color: #fff; }
+.chip.ma-tin { background: var(--ma); color: var(--ma-text); font-size: 13px; font-weight: 800; letter-spacing: .04em;
+  padding: 2px 9px; border-radius: 5px; box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+.chip.ma-tin:hover { filter: brightness(1.15); background: var(--ma); color: var(--ma-text); }
+.chip.ma-tin.sao { background: var(--star); color: #fff; }
 .chip .dem { font-weight: 400; opacity: .7; margin-left: 3px; }
 .tin a.td { color: var(--text); text-decoration: none; font-weight: 600; font-size: 15.5px; }
 .tin a.td:hover { color: var(--accent); text-decoration: underline; }
@@ -575,7 +579,7 @@ function veTin(ds) {
     const ngay = nhanNgay(t.d);
     if (ngay !== ngayTruoc) { html += `<div class="ngay">${ngay}</div>`; ngayTruoc = ngay; }
     const gio = t.d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-    const chips = t.ma.map(m => `<button class="chip ${UU.has(m) ? "sao" : ""}" data-ma="${m}">${m}</button>`).join("");
+    const chips = t.ma.map(m => `<button class="chip ma-tin ${UU.has(m) ? "sao" : ""}" data-ma="${m}" title="Lọc tin mã ${m}">${m}</button>`).join("");
     html += `<article class="tin ${t.uu ? "uu" : ""}" style="--mau:${MAU[t.nhom]}">
       <div class="dong-dau"><span class="gio">${gio}</span><span class="nhan">${TEN_NGAN[t.nhom]}</span>
         ${t.moi ? '<span class="moi">MỚI</span>' : ""}${chips}
