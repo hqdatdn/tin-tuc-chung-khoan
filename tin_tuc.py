@@ -335,8 +335,16 @@ def tim_ma(text, tat_ca_ma, ten_goi):
     return ma
 
 
+# Mã trùng chức danh: "(CEO)" thường là chú thích "Giám đốc điều hành (CEO)", không phải mã cổ phiếu
+# (góp ý 25/11: "CEO Nvidia Jensen Huang thừa nhận sai lầm" bị gắn mã CEO). Cần "mã/cổ phiếu CEO", "HNX: CEO", "Tập đoàn CEO".
+MA_CHUC_DANH = {"CEO"}
+RE_NGU_CANH_MA_CHUC_DANH = r"(?i:mã\s+|cổ phiếu\s+|cp\s+|hnx:\s*|tập đoàn\s+){m}(?![{chu}])|C\.E\.O"
+
+
 def co_ngu_canh_ma(m, text):
     """Có "mã X", "cổ phiếu X", "(X)", "HOSE: X" trong bài: chắc chắn đang nói về cổ phiếu X."""
+    if m in MA_CHUC_DANH:
+        return bool(re.search(RE_NGU_CANH_MA_CHUC_DANH.format(m=m, chu=CHU), text))
     return bool(re.search(RE_NGU_CANH_MA.format(m=m, chu=CHU), text))
 
 
